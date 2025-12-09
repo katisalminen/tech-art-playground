@@ -1,31 +1,46 @@
+## FLESHY EYES
+
+
+Reference:
+
 https://www.youtube.com/watch?v=c6XPGvq1Vck
 
 
-// fleshy eyes
+
+## MEL CODE
+
+```mel
+// fleshy eyes expression
 
 bn_eyelid_l_upper.rotateX = (eyebn_l_1.rotateX * 0.35) + (anim_eyes.BlinkL);
 bn_eyelid_l_upper.rotateY = eyebn_l_1.rotateY * 0.15;
 
 bn_eyelid_l_lower.rotateX = (eyebn_l_1.rotateX * 0.25) + (-anim_eyes.BlinkL * 0.3);
 bn_eyelid_l_lower.rotateY = eyebn_l_1.rotateY * 0.15;
+```
+
+## CONTROL & HIERARCHY
+
+- parent eye controls under empty and center pivot
+
+- parent constrain head bone -> group
+
+- key transform + rotate on eye control parent (shift W + E)
 
 
 
-parent eye controls under empty and center pivot
+## FOLLOW ATTRIBUTE
 
-parent constrain head bone -> group
+- create follow attribute on main eye control
 
-key transform + rotate on eye control parent (shift W + E)
+- connect eye control attribute to blend parent on parent group with connection editor
 
-create follow attribute on main eye control
+## IK SETUP
 
-connect eye control attribute to blend parent on parent group with connection editor
+- IK handle from eye bone root to end
 
+- point constrain control -> IK handle
 
-IK handle from eye bone root to end
+- parent IK handle to control
 
-point constrain control -> IK handle
-
-parent IK handle to control
-
-remove point constraint
+- remove point constraint
