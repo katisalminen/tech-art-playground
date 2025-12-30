@@ -15,16 +15,44 @@ def ensure_maya():
         cmds.about(version=True)
     except Exception:
         raise RuntimeError("Maya Python environment not initialized.")
+    
+
+# renaming helper
+
+def get_unique_name(base_name: str, start: int = 1, pad: int = 2) -> str:
+    i = start
+    while True:
+        candidate = f"{base_name}_{i:0{pad}d}"
+        if not cmds.objExists(candidate):
+            return candidate
+        i += 1
 
 
-def build_control_circle():
+
+def create_control():
     ensure_maya()
 
-    # joint selected y/n?
-    # control name, joint or default?
+    # selection: 1 item, multiple, or none
 
+    sel = cmds.ls(selection=True)
+    joint = None
 
-    # create circle
+    if not sel:
+        mode = "default"
+
+    elif len(sel) == 1:
+        joint = sel[0]
+        if cmds.nodeType(joint) != "joint":
+            raise RuntimeError("Please select exactly one joint, or nothing.")
+        # check if selected joint has been renamed
+        else:
+            pass
+        mode = "joint"
+
+    else:
+        raise RuntimeError(f"Multiple items selected: {sel}")
+
+    # create control
 
     ctrl = cmds.circle(nr=(0, 1, 0), r=20, ch=False)[0]
 
@@ -34,16 +62,24 @@ def build_control_circle():
 
     shape = shapes[0]
 
-    # rename circle
+    # rename control
 
+    if mode == "default":
+        new_name = get_unique_name("anim_control")
+        ctrl = cmds.rename(ctrl, new_name)
+
+    elif mode == "joint":
+        ctrl = cmds.rename()
+
+    else:
+        raise RuntimeError("Invalid mode for renaming.")
+    
     # create offset group
 
 
     # if joint selected, snap offset group to joint, lock offset group attributes
 
-    # if no joint selection, default name
-
-    ctrl = cmds.rename(ctrl, "anim_circle_01")
+    
     
 
     # enable drawing overrides
@@ -55,6 +91,6 @@ def build_control_circle():
     cmds.setAttr(f"{shape}.overrideColor", 13) # red
 
 
-build_control_circle()
+create_control()
 
 
