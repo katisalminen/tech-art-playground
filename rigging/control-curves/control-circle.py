@@ -1,7 +1,7 @@
 
-# CONTROL CIRCLE
+# CONTROL CIRCLE -- start of control creation tool
 
-# import cmds + maya check
+import re
 
 try:
     import maya.cmds as cmds
@@ -42,11 +42,17 @@ def create_control():
 
     elif len(sel) == 1:
         joint = sel[0]
+
         if cmds.nodeType(joint) != "joint":
             raise RuntimeError("Please select exactly one joint, or nothing.")
-        # check if selected joint has been renamed
-        else:
-            pass
+        
+        # check for default Maya joint naming
+        short_name = joint.split(":")[-1]
+        if re.match(r"^joint\d+$", short_name):
+            raise RuntimeError("" \
+            f"Joint '{joint} uses Maya default naming - please rename."
+            )
+        
         mode = "joint"
 
     else:
@@ -69,7 +75,8 @@ def create_control():
         ctrl = cmds.rename(ctrl, new_name)
 
     elif mode == "joint":
-        ctrl = cmds.rename()
+        if short_name.startswith("bn_"):
+            ctrl = cmds.rename()
 
     else:
         raise RuntimeError("Invalid mode for renaming.")
