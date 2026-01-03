@@ -1,19 +1,69 @@
-# JOINT RENAMING TOOL
+""""
+JOINT RENAMING TOOL
 
-# import maya commands
-# check that the script is running in maya
+This is the V1 version of the Joint Renaming Tool.
 
-# check if a joint is selected
-    # if not, inform the user they need to select a joint or the start of the joint chain
-    # if yes, check if the joint hierarchy has multiple branches
-        # if yes, inform the user the joint hierarchy cannot have multiple branches
-        # if not, run the program
+V1:
+
+    - Validate selection: one joint selected, is a joint, chain is single-branch
+    - Store joint information in a list of dictionaries
+    - Rename joint chain with default names
+    - Add and increment numerical index to renamed joints
+    - Skip already named joints: starts with bn_, hbn_, ebn_, be_
+    - bn_basename<index>
+
+V2:
+
+    - UI
+    - User inputs base name
+    - Buttons for rename, skip, close
+    - bn_<basename><index>
+
+V3:
+
+    - Dropdowns for joint type, side, region
+    - Checkboxes for indexing, skipping already named joints
+    - <prefix>_<side>_<region>_<basename><index>
+
+Future improvements:
+    - Use Classes instead of Dictionaries to store joint information
+
+"""
+
+import maya.cmds as cmds
+
+# validate selection
+    # nothing -> inform user to select a joint
+    # multiple -> inform user to select one joint
+    # check type:
+        # not a joint -> inform user to select a joint
+        # joint -> proceed
+    # check if any joint in the chain has multiple joint children
+        # yes -> inform the user the joint hierarchy cannot have multiple branches
+        # no -> run the program
+
+
+
+# store selected joints in a list of dictionaries in order of root -> leaf
+    # joint name
+    # does it look named True/False
+
+# build new joint names
+    # <prefix>_<side>_<region>_<basename><index>
+
+# rename each joint
+    # skip joints that are already named
+    # if renaming fails e.g. due to a locked joint, stop and report
+
+
+
 
 
 
 
 
 ## UI
+# show current name
 # joint type: regular, hair, eyelid
 # joint side: none, left, right
 # joint region: none, upper, middle, lower

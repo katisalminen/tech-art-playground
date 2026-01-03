@@ -2,19 +2,7 @@
 # CONTROL CIRCLE -- start of control creation tool
 
 import re
-
-try:
-    import maya.cmds as cmds
-except ImportError:
-    cmds = None
-
-def ensure_maya():
-    if cmds is None:
-        raise RuntimeError("This script must be run inside Maya.")
-    try:
-        cmds.about(version=True)
-    except Exception:
-        raise RuntimeError("Maya Python environment not initialized.")
+import maya.cmds as cmds
     
 
 # renaming helper
@@ -30,7 +18,6 @@ def get_unique_name(base_name: str, start: int = 1, pad: int = 2) -> str:
 
 
 def create_control():
-    ensure_maya()
 
     # selection: 1 item, multiple, or none
 

@@ -61,18 +61,28 @@ This tool does not perform fully automatic or template-based naming. The user is
 - Choose whether you wish to add numerical indexing to the end of the joint name: 01, 02, etc.
 
 
+### Skip Named Joints
+
+- Choose whether you wish to skip naming joints that already appear named.
+
+
 ## Example joint chains 
 
 1. `bn_l_hip01`
 2. `bn_l_knee01`
 3. `bn_l_ankle01`
+4. `bn_l_toebox01`
+5. `be_l_toe01`
 
 ---
 
-1. `bn_r_upper_indexfinger01`
-2. `bn_r_middle_indexfinger01`
-3. `bn_r_lower_indexfinger01`
-4. `be_r_indexfinger01`
+1. `bn_r_upper_eyelid01`
+2. `be_r_upper_eyelid01`
+
+---
+
+1. `bn_r_lower_eyelid01`
+2. `be_r_lower_eyelid01`
 
 ---
 
