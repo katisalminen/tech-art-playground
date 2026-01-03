@@ -36,7 +36,7 @@ This tool does not perform fully automatic or template-based naming. The user is
 
     - Regular joints: `bn_`
     - Hair joints: `hbn_`
-    - Eye joints: `ebn_`
+    - Eyelid joints: `ebn_`
     - End of a joint chain: `be_`
 
 
@@ -44,13 +44,13 @@ This tool does not perform fully automatic or template-based naming. The user is
 
 - Add a modifier to indicate the left or right side of the body.
 
-    - None: no modifier
+    - Default: no modifier
     - Left: `l_`
     - Right: `r_`
 
 - Further modifiers for upper, lower or middle part of e.g. lips, teeth or eyelids.
 
-    - None: no modifier
+    - Default: no modifier
     - Upper: `upper_`
     - Lower: `lower_`
     - Middle: `mid_`
