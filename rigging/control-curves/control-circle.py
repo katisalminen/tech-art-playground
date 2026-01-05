@@ -37,7 +37,7 @@ def create_control():
         short_name = joint.split(":")[-1]
         if re.match(r"^joint\d+$", short_name):
             raise RuntimeError("" \
-            f"Joint '{joint} uses Maya default naming - please rename."
+            f"Joint '{joint}' uses Maya default naming - please rename."
             )
         
         mode = "joint"

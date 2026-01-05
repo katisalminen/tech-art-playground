@@ -32,21 +32,62 @@ Future improvements:
 
 import maya.cmds as cmds
 
-# validate selection
-    # nothing -> inform user to select a joint
-    # multiple -> inform user to select one joint
-    # check type:
-        # not a joint -> inform user to select a joint
-        # joint -> proceed
-    # check if any joint in the chain has multiple joint children
-        # yes -> inform the user the joint hierarchy cannot have multiple branches
-        # no -> run the program
+# VARIABLES
+
+sel = cmds.ls(selection=True) # selection
+named_prefixes = ("bn_", "hbn_", "ebn_", "be_")
+basename = "newname" # default base name for V1
+joint_chain = [] # list of joint hierarchy
+joint_chain_info = [] # joint names and whether they are named in a list of dictionaries
+
+# HELPER FUNCTIONS
+
+def is_named(name: str):
+    if name.startswith(named_prefixes):
+        return True
+    else:
+        return False
+    
+def check_children(joint: str):
+    children = cmds.listRelatives(joint, type="joint")
+    if not children:
+        children = []
+    return children
 
 
+# VALIDATE SELECTION
 
-# store selected joints in a list of dictionaries in order of root -> leaf
-    # joint name
-    # does it look named True/False
+if not sel:
+    raise RuntimeError("Please select the start of the joint chain.")
+elif len(sel) == 1:
+    if cmds.nodeType(sel[0]) != "joint":
+        raise RuntimeError("Selection is not a joint.")
+    else:
+        current_joint = sel[0]
+else:
+    raise RuntimeError("Please select only one joint.")
+
+# CHECK IF SOME JOINTS ARE ALREADY NAMED
+
+while True:
+    joint_children = check_children(current_joint)
+    if len(joint_children) > 1:
+        raise RuntimeError(f"Joint {current_joint} has multiple joint children. Select a single chain.")
+    else:
+        joint_chain.append(current_joint)
+        if not joint_children:
+            break
+        else:
+            current_joint = joint_children[0]
+
+for joint in joint_chain:
+    joint_dict = {
+        "name": joint, 
+        "already_named": is_named(joint)
+        }
+    joint_chain_info.append(joint_dict)
+
+
 
 # build new joint names
     # <prefix>_<side>_<region>_<basename><index>
