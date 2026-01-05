@@ -35,15 +35,30 @@ import maya.cmds as cmds
 # VARIABLES
 
 sel = cmds.ls(selection=True) # selection
-named_prefixes = ("bn_", "hbn_", "ebn_", "be_")
-basename = "newname" # default base name for V1
+
+prefixes = {
+    "Default": "bn_",
+    "Hair": "hbn_",
+    "Eyelid": "ebn_",
+    "End bone": "be_"
+    }
+
+prefix_values = tuple(prefixes.values())
+
+base_name = "temp" # default base name for V1, later user input
+skip_already_named = True # later user-controlled
+
+use_index = True # later user-controlled
+index = 1 # index start number
+index_padding = 2 # 01, 02 etc.
+
 joint_chain = [] # list of joint hierarchy
 joint_chain_info = [] # joint names and whether they are named in a list of dictionaries
 
 # HELPER FUNCTIONS
 
 def is_named(name: str):
-    if name.startswith(named_prefixes):
+    if name.startswith(prefix_values):
         return True
     else:
         return False
@@ -67,7 +82,7 @@ elif len(sel) == 1:
 else:
     raise RuntimeError("Please select only one joint.")
 
-# CHECK IF SOME JOINTS ARE ALREADY NAMED
+# CHECK FOR BRANCHING
 
 while True:
     joint_children = check_children(current_joint)
@@ -80,21 +95,53 @@ while True:
         else:
             current_joint = joint_children[0]
 
+# CHECK WHICH JOINTS ARE ALREADY NAMED
 for joint in joint_chain:
     joint_dict = {
-        "name": joint, 
+        "og_name": joint, 
         "already_named": is_named(joint)
         }
     joint_chain_info.append(joint_dict)
 
+# RENAMING YES/NO
+for joint in joint_chain_info:
+    if joint.get("already_named"):
+        if not skip_already_named:
+            joint["will_rename"] = True
+        else:
+            joint["will_rename"] = False
+    else:
+        joint["will_rename"] = True
 
 
-# build new joint names
-    # <prefix>_<side>_<region>_<basename><index>
+# BASENAME
+for joint in joint_chain_info:
 
-# rename each joint
-    # skip joints that are already named
-    # if renaming fails e.g. due to a locked joint, stop and report
+    if joint.get("will_rename"):
+        joint["base_name"] = base_name
+
+
+#INDEXING
+for joint in joint_chain_info:
+
+    if use_index and joint.get("will_rename"):
+        joint["index"] = index
+        index += 1
+
+
+# RENAME JOINTS
+for joint in joint_chain_info:
+
+    if joint.get("will_rename"):
+
+        if joint.get("index"):
+            index_str = str(joint.get("index")).zfill(index_padding)
+        else:
+            index_str = ""
+
+        new_name = f"bn_{joint.get('base_name')}{index_str}"
+
+        cmds.rename(joint["og_name"], new_name)
 
 
 
