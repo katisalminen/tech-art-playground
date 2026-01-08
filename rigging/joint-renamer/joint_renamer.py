@@ -1,8 +1,6 @@
 """"
 JOINT RENAMING TOOL
 
-This is the V1 version of the Joint Renaming Tool.
-
 V2:
 
     - UI
@@ -144,6 +142,59 @@ def rename(user_name: str, skip: bool, use_index: bool, index: int):
 
 
 
+def show_ui():
+
+    window_id = "joint_renamer_v2"
+    window_title = "Joint Renamer V2"
+    basename_label = "Basename:"
+
+    def closeWindow(*args):
+        cmds.deleteUI(window_id)
+
+    if cmds.window(window_id, exists=True):
+        cmds.deleteUI(window_id)
+
+    cmds.window(
+        window_id, 
+        title=window_title, 
+        widthHeight=(350, 125),
+        sizeable=False
+        )
+    
+    cmds.columnLayout(adjustableColumn=True)
+
+    cmds.separator(height=20, style="none")
+
+    basename_field = cmds.textFieldGrp(
+        label=basename_label,
+        text="",
+        columnWidth=(1,70),
+        ann="Type joint's base name here."
+        )
+    
+    cmds.separator(
+        height=50, 
+        style="none"
+        )
+
+    cmds.rowLayout(
+        numberOfColumns=2,
+        columnWidth2=[175,175],
+        )
+    
+    cmds.button(label="Rename",width=175)
+    cmds.button(
+        label="Close",
+        width=175,
+        command=closeWindow
+        )
+    
+    cmds.setParent("..")
+    cmds.showWindow(window_id)
+    
+
+
+show_ui()
 
 
 
