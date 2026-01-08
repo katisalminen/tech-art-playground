@@ -1,18 +1,28 @@
 """"
 JOINT RENAMING TOOL
 
-V2:
-
-    - UI
-    - User inputs base name
-    - Buttons for rename, close
-    - bn_<basename><index>
-
 V3:
 
     - Dropdowns for joint type, side, region
     - Checkboxes for indexing, skipping already named joints
     - <prefix>_<side>_<region>_<basename><index>
+    - Still name the entire chain in one go
+    - Auto end bone prefixes be_, hbe_, ebe_
+    - Refactor rename(), split into three functions:
+        - Joint chain validation
+        - Deciding new names
+        - Renaming
+
+
+V4:
+
+    - Traverse down the joint chain
+    - Individually rename each joint
+        - Preserve basename text between passes
+        - User can input basename -> click -> click -> click: bn_name01, bn_name01, bn_name03
+        - Or name individually: bn_firstjoint01 -> click -> bn_secondjoint01 -> click
+    - "Current Name" field for name that is being overwritten
+    - "New Name" preview
 
 Future improvements:
     - Use Classes instead of Dictionaries to store joint information
@@ -148,8 +158,23 @@ def show_ui():
     window_title = "Joint Renamer V2"
     basename_label = "Basename:"
 
-    def closeWindow(*args):
+    window_width = 350
+    half = window_width//2
+    label_w = window_width//5
+
+    def onClose(*args):
         cmds.deleteUI(window_id)
+
+    def onRename(*args):
+        user_input = cmds.textFieldGrp(
+            basename_field,
+            query = True,
+            text = True
+
+        )
+
+        rename(user_input,True,True,1)
+
 
     if cmds.window(window_id, exists=True):
         cmds.deleteUI(window_id)
@@ -157,7 +182,7 @@ def show_ui():
     cmds.window(
         window_id, 
         title=window_title, 
-        widthHeight=(350, 125),
+        widthHeight=(window_width, 125),
         sizeable=False
         )
     
@@ -168,7 +193,7 @@ def show_ui():
     basename_field = cmds.textFieldGrp(
         label=basename_label,
         text="",
-        columnWidth=(1,70),
+        columnWidth=(1,label_w),
         ann="Type joint's base name here."
         )
     
@@ -177,16 +202,18 @@ def show_ui():
         style="none"
         )
 
-    cmds.rowLayout(
-        numberOfColumns=2,
-        columnWidth2=[175,175],
+    cmds.rowLayout(numberOfColumns=2)
+    
+    cmds.button(
+        label="Rename",
+        width=half,
+        command=onRename
         )
     
-    cmds.button(label="Rename",width=175)
     cmds.button(
         label="Close",
-        width=175,
-        command=closeWindow
+        width=half,
+        command=onClose
         )
     
     cmds.setParent("..")
