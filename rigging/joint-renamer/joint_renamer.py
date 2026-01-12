@@ -32,6 +32,7 @@ Future improvements:
 """
 
 import maya.cmds as cmds
+import re
 
 prefixes = {
     "Default": "bn_",
@@ -96,53 +97,36 @@ def define_name(chain: list[str], basename: str, should_skip: bool, use_index: b
     index_padding = 2
     index = 1
     name_plan = [] 
-        # a list of dictionaries: og_name, new_name, index, will_rename, skip, end joint
+    end_joint = chain[-1]
 
-# validate
-
-    if not clean_name:
-        raise RuntimeError("Joint name cannot be empty.")
-    elif clean_name[0].isdigit():
-        raise RuntimeError("Name cannot start with a digit.")
-
-    for c in clean_name:
-        if not c.isalnum() and c != "_":
-            raise RuntimeError("Name should only have letters A-Z, digits or underscores.")
-        
     if not chain:
         raise RuntimeError("Internal error: joint chain is empty.")
 
-# is it named already?
-
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", clean_name):
+        raise RuntimeError("Name must start with a letter or underscore and contain only A-Z, digits, or underscores.")
+    
     for joint in chain:
+        already_named = is_named(joint)
+        will_rename = not (already_named and should_skip)
+
         joint_dict = {
             "og_name": joint, 
-            "already_named": is_named(joint)
+            "already_named": already_named,
+            "is_end": (joint == end_joint),
+            "will_rename": will_rename,
+            "prefix": prefix_values[0],
+            "basename": clean_name if will_rename else None,
+            "index": None,
             }
-        name_plan.append(joint_dict)
-
-# should the joint be renamed?
-
-    for joint in name_plan:
-        joint["will_rename"] = not (joint["already_named"] and should_skip)
-
-    for joint in name_plan: # obsolete but potentially needed later, otherwise remove
-        if joint["will_rename"]:
-            joint["basename"] = clean_name 
-        else:
-            joint["basename"] = None
-
-# indexing
-
-    for joint in name_plan:
-
-        if use_index and joint["will_rename"]:
-            joint["index"] = index
+        
+        if use_index and will_rename:
+            joint_dict["index"] = index
             index += 1
-        else:
-            joint["index"] = None
 
-# finish building name_plan[]
+        if joint_dict["is_end"]:
+            joint_dict["prefix"] = prefix_values[3]
+
+        name_plan.append(joint_dict)
 
     for joint in name_plan:
 
@@ -153,7 +137,12 @@ def define_name(chain: list[str], basename: str, should_skip: bool, use_index: b
             else:
                 index_str = ""
 
-            joint["new_name"] = f"bn_{joint['basename']}{index_str}"
+            if not joint["is_end"]:
+                prefix = prefix_values[0]
+            else:
+                prefix = prefix_values[3]
+            
+            joint["new_name"] = f"{prefix}{joint['basename']}{index_str}"
         
         else:
             joint["new_name"] = None
