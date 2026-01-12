@@ -2,17 +2,11 @@
 JOINT RENAMING TOOL
 
 V3:
-
-    - Refactor rename(), split into three functions:
-        - Joint chain validation
-        - Deciding new names
-        - Renaming
     
+    - Rethink system for storing and accessing prefixes
     - Skip & index toggle, no UI yet
     - Joint type, side, region naming, no UI yet
     - <prefix_><side_><region_><basename><index>
-    - Still name the entire chain in one go
-    - Auto end bone prefixes be_, hbe_, ebe_
     - UI controls: index, skip, prefix dropdown
 
 
@@ -97,7 +91,8 @@ def define_name(chain: list[str], basename: str, should_skip: bool, use_index: b
     index_padding = 2
     index = 1
     name_plan = [] 
-    end_joint = chain[-1]
+
+    def is_end(j): return j == chain[-1]
 
     if not chain:
         raise RuntimeError("Internal error: joint chain is empty.")
@@ -108,13 +103,15 @@ def define_name(chain: list[str], basename: str, should_skip: bool, use_index: b
     for joint in chain:
         already_named = is_named(joint)
         will_rename = not (already_named and should_skip)
+        end = is_end(joint)
+        prefix = prefix_values[0] if not end else prefix_values[3]
 
         joint_dict = {
             "og_name": joint, 
             "already_named": already_named,
-            "is_end": (joint == end_joint),
+            "is_end": end,
             "will_rename": will_rename,
-            "prefix": prefix_values[0],
+            "prefix": prefix if will_rename else None,
             "basename": clean_name if will_rename else None,
             "index": None,
             }
@@ -122,9 +119,6 @@ def define_name(chain: list[str], basename: str, should_skip: bool, use_index: b
         if use_index and will_rename:
             joint_dict["index"] = index
             index += 1
-
-        if joint_dict["is_end"]:
-            joint_dict["prefix"] = prefix_values[3]
 
         name_plan.append(joint_dict)
 
@@ -136,13 +130,8 @@ def define_name(chain: list[str], basename: str, should_skip: bool, use_index: b
                 index_str = str(joint["index"]).zfill(index_padding)
             else:
                 index_str = ""
-
-            if not joint["is_end"]:
-                prefix = prefix_values[0]
-            else:
-                prefix = prefix_values[3]
             
-            joint["new_name"] = f"{prefix}{joint['basename']}{index_str}"
+            joint["new_name"] = f"{joint['prefix']}{joint['basename']}{index_str}"
         
         else:
             joint["new_name"] = None
