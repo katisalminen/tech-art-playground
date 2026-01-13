@@ -3,8 +3,6 @@ JOINT RENAMING TOOL
 
 V3:
     
-    - <prefix_><side_><region_><basename><index>
-    - UI controls: index, skip, prefix dropdown
 
 
 V4:
@@ -14,42 +12,46 @@ V4:
         - Preserve basename text between passes
         - User can input basename -> click -> click -> click: bn_name01, bn_name01, bn_name03
         - Or name individually: bn_firstjoint01 -> click -> bn_secondjoint01 -> click
-    - "Current Name" field for name that is being overwritten
-    - "New Name" preview
+    - "New Name" preview?
 
 Future improvements:
     - Use Classes instead of Dictionaries to store joint information
+    - User can define joint prefix label and name, add as many as they like
+    - User preferences are stored between Maya restarts
 
 """
 
 import maya.cmds as cmds
 import re
 
-pf = {
+
+
+pf_dict = {
     "Default": "bn_",
     "Hair": "hbn_",
     "Eyelid": "ebn_",
     "End bone": "be_"
     }
 
-all_pf = tuple(pf.values())
-default_pf = pf["Default"]
-hair_pf = pf["Hair"]
-eyelid_pf = pf["Eyelid"]
-end_pf = pf["End bone"]
+all_joints_pf = tuple(pf_dict.values())
+default_joint_pf = pf_dict["Default"]
+hair_joint_pf = pf_dict["Hair"]
+eyelid_joint_pf = pf_dict["Eyelid"]
+end_joint_pf = pf_dict["End bone"]
 
-side = {
+side_dict = {
     "None": "",
     "Left": "l_",
     "Right": "r_"
     }
 
-region = {
+region_dict = {
     "None": "",
     "Upper": "upper_",
     "Middle": "middle_",
-    "Lower:": "lower_"
+    "Lower": "lower_"
     }
+
 
 
 def short_name(dag_path: str) -> str:
@@ -58,7 +60,7 @@ def short_name(dag_path: str) -> str:
     return dag_path.split("|")[-1]
 
 def is_named(name: str) -> bool:
-    return short_name(name).startswith(all_pf)
+    return short_name(name).startswith(all_joints_pf)
     
 def check_children(joint: str) -> list[str]:
     children = cmds.listRelatives(joint, type="joint", fullPath=True) or []
@@ -126,7 +128,7 @@ def define_name(
         already_named = is_named(joint)
         will_rename = not (already_named and should_skip)
         is_end_joint = (joint == end_joint)
-        prefix = prefix if not is_end_joint else end_pf
+        prefix = prefix if not is_end_joint else end_joint_pf
 
         joint_dict = {
             "og_name": joint, 
@@ -180,52 +182,49 @@ def show_ui():
     window_id = "joint_renamer_v3"
     window_title = "Joint Renamer V3"
     basename_label = "Basename:"
+    mode_all = "Rename All"
+    mode_one = "Rename One By One"
 
     window_width = 350
     half = window_width//2
     third = window_width//3
     label_w = window_width//5
 
-    mode_all = "Rename All"
-    mode_one = "Rename One By One"
 
-    can_use_index = True
+    def update_mode_status(*args):
+        current_mode = cmds.optionMenu(mode_menu, query=True, value=True)
+        if current_mode == mode_all:
+            cmds.checkBox(index_cb, edit=True, value=True, enable=False)
+            cmds.button(skip_button, edit=True, enable=False)
+        else:
+            cmds.checkBox(index_cb, edit=True, enable=True)
 
-    def update_index_status():
-        if cmds.optionMenu(mode_menu, query=True, value=True) == mode_all:
-            can_use_index = False
+    def read_ui_for_rename() -> tuple:
+        prefix_token = pf_dict[cmds.optionMenu(joint_type_menu, query=True, value=True)]
+        side_token = side_dict[cmds.optionMenu(side_menu, query=True, value=True)]
+        region_token = region_dict[cmds.optionMenu(region_menu, query=True, value=True)]
+        basename_token = cmds.textFieldGrp(basename_field, query = True, text = True)
+        skip_token = cmds.checkBox(skip_cb, query=True, value=True)
+        index_token = cmds.checkBox(index_cb, query=True, value=True)
+        return (prefix_token, side_token, region_token, basename_token, skip_token, index_token)
+        
 
     def onClose(*args):
         cmds.deleteUI(window_id)
 
-    def onSkip(*args):
+    def onSkip(*args): 
         pass
 
     def onRename(*args):
         mode_type = cmds.optionMenu(mode_menu, query=True, value=True)
         if mode_type == mode_all:
-            user_input = cmds.textFieldGrp(
-                basename_field,
-                query = True,
-                text = True)
-            use_index = True
-            should_skip = cmds.checkBox(skip_cb, query=True, value=True)
-            prefix_label = pf[cmds.optionMenu(joint_type_menu, query=True, value=True)]
-            side_label = side[cmds.optionMenu(side_menu, query=True, value=True)]
-            region_label = region[cmds.optionMenu(region_menu, query=True, value=True)]
+            rename_info = read_ui_for_rename()
             rename_chain = validate()
-            rename_chain_dict = define_name(
-                rename_chain,
-                prefix_label,
-                side_label,
-                region_label,
-                user_input,
-                should_skip,
-                use_index)
+            rename_chain_dict = define_name(rename_chain, *rename_info)
             apply_rename(rename_chain_dict)
 
         elif mode_type == mode_one:
-            use_index = cmds.checkBox(index_cb, query=True, value=True)
+            pass
 
     if cmds.window(window_id, exists=True):
         cmds.deleteUI(window_id)
@@ -255,20 +254,19 @@ def show_ui():
     cmds.columnLayout(adjustableColumn=True)
 
     joint_type_menu = cmds.optionMenu(label="Joint Type")
-    cmds.menuItem(label="Default")
-    cmds.menuItem(label="Hair")
-    cmds.menuItem(label="Eyelid")
+    for name in pf_dict:
+        if name == "End bone":
+            continue
+        cmds.menuItem(label=name)
+
 
     side_menu = cmds.optionMenu(label="Side")
-    cmds.menuItem(label="None")
-    cmds.menuItem(label="Left")
-    cmds.menuItem(label="Right")
+    for name in side_dict:
+        cmds.menuItem(label=name)
 
     region_menu = cmds.optionMenu(label="Region")
-    cmds.menuItem(label="None")
-    cmds.menuItem(label="Upper")
-    cmds.menuItem(label="Middle")
-    cmds.menuItem(label="Lower")
+    for name in region_dict:
+        cmds.menuItem(label=name)
 
     cmds.setParent("..")
    
@@ -278,7 +276,6 @@ def show_ui():
         label="Numerical Indexing",
         width=half,
         value=True,
-        enable=can_use_index
         )
     
     skip_cb = cmds.checkBox(
@@ -291,9 +288,12 @@ def show_ui():
     cmds.setParent("..")
     cmds.separator(height=10, style="none")
     
-    mode_menu = cmds.optionMenu(label="Mode",width=half)
-    cmds.menuItem(label=mode_one,changeCommand=update_index_status)
-    cmds.menuItem(label=mode_all,changeCommand=update_index_status)
+    mode_menu = cmds.optionMenu(
+        label="Mode",
+        width=half,
+        changeCommand=update_mode_status)
+    cmds.menuItem(label=mode_one)
+    cmds.menuItem(label=mode_all)
 
 
     cmds.separator(height=10, style="none")
@@ -306,7 +306,7 @@ def show_ui():
         command=onRename
         )
     
-    cmds.button(
+    skip_button = cmds.button(
         label="Skip",
         width=third,
         command=onSkip
@@ -319,6 +319,7 @@ def show_ui():
         )
     
     cmds.setParent("..")
+    update_mode_status()
     cmds.showWindow(window_id)
     
 
