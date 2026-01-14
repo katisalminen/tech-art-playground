@@ -1,17 +1,13 @@
 """"
 JOINT RENAMING TOOL
 
-V3:
-    
-
-
 V4:
 
+    - Keep Basename checkbox
     - Traverse down the joint chain
     - Individually rename each joint
-        - Preserve basename text between passes
-        - User can input basename -> click -> click -> click: bn_name01, bn_name01, bn_name03
-        - Or name individually: bn_firstjoint01 -> click -> bn_secondjoint01 -> click
+        - Preserve basename text between passes or delete?
+        - Core loop: write basename, select modifiers -> click Rename -> joint is named, automatically moves to the next joint -> write basename, select modifiers -> rename -> etc.
     - "New Name" preview?
 
 Future improvements:
@@ -30,7 +26,10 @@ pf_dict = {
     "Default": "bn_",
     "Hair": "hbn_",
     "Eyelid": "ebn_",
-    "End bone": "be_"
+
+    "End bone": "be_",
+    "Hair end bone": "hbe_",
+    "Eyelid end bone": "ebe_"
     }
 
 all_joints_pf = tuple(pf_dict.values())
@@ -38,6 +37,8 @@ default_joint_pf = pf_dict["Default"]
 hair_joint_pf = pf_dict["Hair"]
 eyelid_joint_pf = pf_dict["Eyelid"]
 end_joint_pf = pf_dict["End bone"]
+hair_end_joint_pf = pf_dict["Hair end bone"]
+eyelid_end_joint_pf = pf_dict["Eyelid end bone"]
 
 side_dict = {
     "None": "",
@@ -100,9 +101,14 @@ def validate() -> list[str]:
 
 
 
-# FUNCTION 2: Decide the new names
 
-def define_name(
+
+
+
+
+# FUNCTION 3
+
+def rename_all(
         chain: list[str],
         prefix: str,
         side: str,
@@ -116,19 +122,28 @@ def define_name(
         raise RuntimeError("Internal error: joint chain is empty.")
     
     clean_name = basename.strip()
+
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", clean_name):
+        raise RuntimeError("Name must start with a letter or underscore and contain only A-Z, digits, or underscores.")
+
     index_padding = 2
     index = 1
     name_plan = [] 
     end_joint = chain[-1]
 
-    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", clean_name):
-        raise RuntimeError("Name must start with a letter or underscore and contain only A-Z, digits, or underscores.")
+    end_swap = {
+        default_joint_pf: end_joint_pf,
+        hair_joint_pf: hair_end_joint_pf,
+        eyelid_joint_pf: eyelid_end_joint_pf
+    }
+
+    end_prefix = end_swap.get(prefix, end_joint_pf)
     
     for joint in chain:
         already_named = is_named(joint)
         will_rename = not (already_named and should_skip)
         is_end_joint = (joint == end_joint)
-        prefix = prefix if not is_end_joint else end_joint_pf
+        prefix = prefix if not is_end_joint else end_prefix
 
         joint_dict = {
             "og_name": joint, 
@@ -165,7 +180,7 @@ def define_name(
 
     return name_plan
 
-# FUNCTION 3: Rename!!
+# FUNCTION 4: Rename!!
 
 def apply_rename(plan: list[dict]):
 
@@ -179,30 +194,37 @@ def apply_rename(plan: list[dict]):
 
 def show_ui():
 
-    window_id = "joint_renamer_v3"
-    window_title = "Joint Renamer V3"
-    basename_label = "Basename:"
+    window_id = "joint_renamer_v4"
+    window_title = "Joint Renamer V4"
+    basename_label = "Basename "
     mode_all = "Rename All"
     mode_one = "Rename One By One"
 
-    window_width = 350
-    half = window_width//2
-    third = window_width//3
-    label_w = window_width//5
+    window_width = 400
+    window_height = 210
+    window_padding = 10
+    separator_padding = window_padding
+    window_content_width = window_width-window_padding*2
+    half = window_content_width//2
+    third = window_content_width//3
+    quarter = window_content_width//4
 
 
     def update_mode_status(*args):
         current_mode = cmds.optionMenu(mode_menu, query=True, value=True)
         if current_mode == mode_all:
             cmds.checkBox(index_cb, edit=True, value=True, enable=False)
+            cmds.checkBox(keep_basename_cb, edit=True, enable=False)
             cmds.button(skip_button, edit=True, enable=False)
         else:
             cmds.checkBox(index_cb, edit=True, enable=True)
+            cmds.checkBox(keep_basename_cb, edit=True, enable=True)
+            cmds.button(skip_button, edit=True, enable=True)
 
     def read_ui_for_rename() -> tuple:
-        prefix_token = pf_dict[cmds.optionMenu(joint_type_menu, query=True, value=True)]
-        side_token = side_dict[cmds.optionMenu(side_menu, query=True, value=True)]
-        region_token = region_dict[cmds.optionMenu(region_menu, query=True, value=True)]
+        prefix_token = pf_dict[cmds.optionMenuGrp(joint_type_menu, query=True, value=True)]
+        side_token = side_dict[cmds.optionMenuGrp(side_menu, query=True, value=True)]
+        region_token = region_dict[cmds.optionMenuGrp(region_menu, query=True, value=True)]
         basename_token = cmds.textFieldGrp(basename_field, query = True, text = True)
         skip_token = cmds.checkBox(skip_cb, query=True, value=True)
         index_token = cmds.checkBox(index_cb, query=True, value=True)
@@ -220,7 +242,7 @@ def show_ui():
         if mode_type == mode_all:
             rename_info = read_ui_for_rename()
             rename_chain = validate()
-            rename_chain_dict = define_name(rename_chain, *rename_info)
+            rename_chain_dict = rename_all(rename_chain, *rename_info)
             apply_rename(rename_chain_dict)
 
         elif mode_type == mode_one:
@@ -234,37 +256,55 @@ def show_ui():
     cmds.window(
         window_id, 
         title=window_title, 
-        widthHeight=(window_width, 185),
+        widthHeight=(window_width, window_height),
         sizeable=False
         )
     
-    cmds.columnLayout(adjustableColumn=True)
-    cmds.separator(height=20, style="none")
+    cmds.columnLayout(adjustableColumn=True,columnOffset=["both", window_padding])
+    cmds.separator(height=separator_padding*1.5, style="none")
 
     basename_field = cmds.textFieldGrp(
         label=basename_label,
         text="",
-        columnWidth=(1,label_w),
-        ann="Type joint's base name here."
+        columnWidth2=(quarter, half),
+        ann="Type joint's base name here"
         )
     
-    cmds.separator(height=10, style="none")
+    cmds.columnLayout(columnOffset=["both", window_padding*4])
+    keep_basename_cb = cmds.checkBox(
+        label="Preserve Basename",
+        ann="Check to preserve typed Basename between Rename passes",
+        value=True
+        )
+    cmds.setParent("..")
+    cmds.separator(height=separator_padding, style="none")
 
-    cmds.rowLayout(numberOfColumns=2)
-    cmds.columnLayout(adjustableColumn=True)
+    cmds.rowLayout(numberOfColumns=2, columnWidth2=(half,half))
+    cmds.columnLayout()
 
-    joint_type_menu = cmds.optionMenu(label="Joint Type")
+    joint_type_menu = cmds.optionMenuGrp(
+        label="Joint Type", 
+        columnWidth=(1,quarter), 
+        ann="Sets the joint prefix"
+        )
     for name in pf_dict:
-        if name == "End bone":
+        if "end" in name.lower():
             continue
         cmds.menuItem(label=name)
 
-
-    side_menu = cmds.optionMenu(label="Side")
+    side_menu = cmds.optionMenuGrp(
+        label="Side", 
+        columnWidth=(1,quarter), 
+        ann="Sets a Left or Right prefix, choose None for empty"
+        )
     for name in side_dict:
         cmds.menuItem(label=name)
 
-    region_menu = cmds.optionMenu(label="Region")
+    region_menu = cmds.optionMenuGrp(
+        label="Region", 
+        columnWidth=(1,quarter), 
+        ann="Choose joint region, e.g. upper and lower lip or eyelid"
+        )
     for name in region_dict:
         cmds.menuItem(label=name)
 
@@ -276,14 +316,16 @@ def show_ui():
         label="Numerical Indexing",
         width=half,
         value=True,
+        ann="Enable/disable numerical indexing 01, 02, etc."
         )
     
     skip_cb = cmds.checkBox(
         label="Skip Named Joints",
         width=half,
-        value=True
+        value=True,
+        ann="Skip joints that appear already named"
         )
-    
+        
     cmds.setParent("..")
     cmds.setParent("..")
     cmds.separator(height=10, style="none")
@@ -296,7 +338,7 @@ def show_ui():
     cmds.menuItem(label=mode_all)
 
 
-    cmds.separator(height=10, style="none")
+    cmds.separator(height=separator_padding, style="none")
 
     cmds.rowLayout(numberOfColumns=3)
     
@@ -326,16 +368,3 @@ def show_ui():
 
 show_ui()
 
-
-
-# UI PLAN
-## show current name
-## joint type: regular, hair, eyelid
-## joint side: none, left, right
-## joint region: none, upper, middle, lower
-## numerical indexing on/off
-## skip joints that look named on/off
-## base name input field
-## rename button
-## skip joint button
-## close button
