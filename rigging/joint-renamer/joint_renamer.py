@@ -46,7 +46,7 @@ state = {
 
 
 
-def short_name(dag_path: str) -> str:
+def short_name(dag_path: str) -> str: # currently obsolete, but retained in case i go back to using DAG paths
     if not dag_path:
         return "" # this shouldn't happen
     return dag_path.split("|")[-1]
@@ -156,7 +156,7 @@ def rename_all(
         basename: str,
         should_skip: bool,
         use_index: bool,
-        preserve_name
+        preserve_name: bool # obsolete but idk
         ) -> str:
     
     if not chain:
@@ -178,7 +178,7 @@ def rename_all(
 
 def apply_rename_all(plan: list[dict]):        
 
-    for joint in reversed(plan):
+    for joint in reversed(plan): # reversed in case i go back to using DAG paths
         if joint["new_name"]:
             cmds.rename(joint["og_name"], joint["new_name"])
 
