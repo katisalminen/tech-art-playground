@@ -1,21 +1,4 @@
-""""
-JOINT RENAMING TOOL
 
-V4:
-
-    - Keep Basename checkbox
-    - Traverse down the joint chain
-    - Individually rename each joint
-        - Preserve basename text between passes or delete?
-        - Core loop: write basename, select modifiers -> click Rename -> joint is named, automatically moves to the next joint -> write basename, select modifiers -> rename -> etc.
-    - "New Name" preview?
-
-Future improvements:
-    - Use Classes instead of Dictionaries to store joint information
-    - User can define joint prefix label and name, add as many as they like
-    - User preferences are stored between Maya restarts
-
-"""
 
 import maya.cmds as cmds
 import re
@@ -32,13 +15,13 @@ pf_dict = {
     "Eyelid end bone": "ebe_"
     }
 
-all_joints_pf = tuple(pf_dict.values())
-default_joint_pf = pf_dict["Default"]
-hair_joint_pf = pf_dict["Hair"]
-eyelid_joint_pf = pf_dict["Eyelid"]
-end_joint_pf = pf_dict["End bone"]
-hair_end_joint_pf = pf_dict["Hair end bone"]
-eyelid_end_joint_pf = pf_dict["Eyelid end bone"]
+pf_all_joints = tuple(pf_dict.values())
+
+pf_end_swap = {
+    pf_dict["Default"]: pf_dict["End bone"],
+    pf_dict["Hair"]: pf_dict["Hair end bone"],
+    pf_dict["Eyelid"]: pf_dict["Eyelid end bone"],
+    }
 
 side_dict = {
     "None": "",
@@ -53,6 +36,14 @@ region_dict = {
     "Lower": "lower_"
     }
 
+# for mode_one ONLY: the session uses this state to traverse through the joint chain
+state = {
+        "chain": [],            # authoritative traversal list that shall not be strayed from
+        "position": 0,          # current position in the chain, +1 when moving to next joint
+        "last_basename": "",    # the basename used on the previous step
+        "run_index": 0          # the current count for that basename run
+    } 
+
 
 
 def short_name(dag_path: str) -> str:
@@ -61,10 +52,10 @@ def short_name(dag_path: str) -> str:
     return dag_path.split("|")[-1]
 
 def is_named(name: str) -> bool:
-    return short_name(name).startswith(all_joints_pf)
+    return short_name(name).startswith(pf_all_joints)
     
 def check_children(joint: str) -> list[str]:
-    children = cmds.listRelatives(joint, type="joint", fullPath=True) or []
+    children = cmds.listRelatives(joint, type="joint") or []
     return children # current joint's child(ren)
 
 
@@ -100,97 +91,112 @@ def validate() -> list[str]:
     return joint_chain
 
 
+# FUNCTION 2: rename just ONE joint
 
-
-
-
-
-
-# FUNCTION 3
-
-def rename_all(
-        chain: list[str],
+def rename_one(
+        chain: list,
+        joint: str,
         prefix: str,
         side: str,
         region: str,
         basename: str,
         should_skip: bool,
-        use_index: bool
-        ) -> list:
+        use_index: bool,
+        keep_basename: bool,
+        index: int,
+        ) -> dict:
 
-    if not chain:
-        raise RuntimeError("Internal error: joint chain is empty.")
-    
     clean_name = basename.strip()
 
     if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", clean_name):
         raise RuntimeError("Name must start with a letter or underscore and contain only A-Z, digits, or underscores.")
 
     index_padding = 2
-    index = 1
-    name_plan = [] 
-    end_joint = chain[-1]
+    index_str = ""
 
-    end_swap = {
-        default_joint_pf: end_joint_pf,
-        hair_joint_pf: hair_end_joint_pf,
-        eyelid_joint_pf: eyelid_end_joint_pf
-    }
-
-    end_prefix = end_swap.get(prefix, end_joint_pf)
+    end_prefix = pf_end_swap.get(prefix, pf_dict["End bone"])
     
-    for joint in chain:
-        already_named = is_named(joint)
-        will_rename = not (already_named and should_skip)
-        is_end_joint = (joint == end_joint)
-        prefix = prefix if not is_end_joint else end_prefix
+    already_named = is_named(joint)
+    will_rename = not (already_named and should_skip)
+    end_joint = chain[-1]
+    is_end_joint = (joint == end_joint)
+    prefix = prefix if not is_end_joint else end_prefix
 
-        joint_dict = {
-            "og_name": joint, 
-            "already_named": already_named,
-            "is_end": is_end_joint,
-            "will_rename": will_rename,
-            "side": side,
-            "region": region,
-            "prefix": prefix if will_rename else None,
-            "basename": clean_name if will_rename else None,
-            "index": None
-            }
-        
-        if use_index and will_rename:
+    joint_dict = {
+        "og_name": joint, 
+        "already_named": already_named,
+        "is_end": is_end_joint,
+        "will_rename": will_rename,
+        "side": side,
+        "region": region,
+        "prefix": prefix if will_rename else None,
+        "basename": clean_name if will_rename else None,
+        "index": None,
+        "new_name": None
+        }
+    
+    if joint_dict["will_rename"]:
+    
+        if use_index:
             joint_dict["index"] = index
+            index_str = str(joint_dict["index"]).zfill(index_padding)
+
+        joint_dict["new_name"] = f"{joint_dict['prefix']}{joint_dict['side']}{joint_dict['region']}{joint_dict['basename']}{index_str}"
+
+    return joint_dict
+
+
+# FUNCTION 3: rename ALL joints in one, calling rename_one
+
+def rename_all(
+        chain: list,
+        prefix: str,
+        side: str,
+        region: str,
+        basename: str,
+        should_skip: bool,
+        use_index: bool,
+        preserve_name
+        ) -> str:
+    
+    if not chain:
+        raise RuntimeError("Internal error: joint chain is empty.")
+
+    name_plan = [] 
+    index = 1
+
+    for joint in chain:
+        # create a list of dictionaries for all joints using rename_one
+        entry = rename_one(chain, joint, prefix, side, region, basename, should_skip, use_index, True, index)
+        if entry["will_rename"]:
             index += 1
-
-        name_plan.append(joint_dict)
-
-    for joint in name_plan:
-
-        if joint["will_rename"]:
-            
-            if joint["index"] is not None:
-                index_str = str(joint["index"]).zfill(index_padding)
-            else:
-                index_str = ""
-            
-            joint["new_name"] = f"{joint['prefix']}{joint['side']}{joint['region']}{joint['basename']}{index_str}"
-        
-        else:
-            joint["new_name"] = None
-
+        name_plan.append(entry)
 
     return name_plan
 
-# FUNCTION 4: Rename!!
+# FUNCTION 4: rename_all in one go
 
-def apply_rename(plan: list[dict]):
+def apply_rename_all(plan: list[dict]):        
 
     for joint in reversed(plan):
         if joint["new_name"]:
             cmds.rename(joint["og_name"], joint["new_name"])
 
 
+# FUNCTION 5 rename_one by one
+
+def apply_rename_one(entry: dict) -> bool:
+
+    if entry["new_name"]:
+        cmds.rename(entry["og_name"], entry["new_name"])
+        return True
+    else:
+        cmds.warning("Skipped joint.")
+        return False
 
 
+
+# WINDOW
 
 def show_ui():
 
@@ -219,7 +225,7 @@ def show_ui():
         else:
             cmds.checkBox(index_cb, edit=True, enable=True)
             cmds.checkBox(keep_basename_cb, edit=True, enable=True)
-            cmds.button(skip_button, edit=True, enable=True)
+            cmds.button(skip_button, edit=True, enable=False)
 
     def read_ui_for_rename() -> tuple:
         prefix_token = pf_dict[cmds.optionMenuGrp(joint_type_menu, query=True, value=True)]
@@ -228,25 +234,82 @@ def show_ui():
         basename_token = cmds.textFieldGrp(basename_field, query = True, text = True)
         skip_token = cmds.checkBox(skip_cb, query=True, value=True)
         index_token = cmds.checkBox(index_cb, query=True, value=True)
-        return (prefix_token, side_token, region_token, basename_token, skip_token, index_token)
+        preserve_basename_token = cmds.checkBox(keep_basename_cb, query=True, value=True)
+        return (prefix_token, side_token, region_token, basename_token, skip_token, index_token, preserve_basename_token)
         
 
     def onClose(*args):
         cmds.deleteUI(window_id)
 
     def onSkip(*args): 
-        pass
+        state["position"] +=1
+        cmds.select(state["chain"][state["position"]], replace=True)
 
     def onRename(*args):
+
         mode_type = cmds.optionMenu(mode_menu, query=True, value=True)
+        rename_info = read_ui_for_rename()
+
         if mode_type == mode_all:
-            rename_info = read_ui_for_rename()
+
             rename_chain = validate()
             rename_chain_dict = rename_all(rename_chain, *rename_info)
-            apply_rename(rename_chain_dict)
+            apply_rename_all(rename_chain_dict)
+
 
         elif mode_type == mode_one:
-            pass
+
+            current_basename = rename_info[3].strip()
+
+            if not state["chain"]:                  # initiate one by one renaming state
+
+                state["chain"] = validate()
+                state["position"] = 0
+                state["last_basename"] = current_basename
+                state["run_index"] = 1
+                index = 1
+                cmds.button(skip_button, edit=True, enable=True)
+                            
+
+            else:                                   # continue renaming within the state
+
+                sel = cmds.ls(selection=True, type="joint")
+                expected = state["chain"][state["position"]]
+
+                if len(sel) != 1 or sel[0] != expected:
+                    cmds.select(expected, replace=True)
+                    cmds.warning("Automatically re-selected next joint.")
+
+                
+                if not rename_info[5]:
+                    index = 1
+                else:
+                    if state["last_basename"] != current_basename:
+                        state["last_basename"] = current_basename
+                        state["run_index"] = 1
+                    else:
+                        state["run_index"] += 1
+                    index = state["run_index"]
+
+            rename_dict = rename_one(state["chain"], state["chain"][state["position"]], *rename_info, index)
+            apply_rename_one(rename_dict)
+            state["position"] += 1
+
+            if state["position"] >= len(state["chain"]):    # finish and exit state
+
+                state["chain"].clear()
+                state["position"] = 0
+                cmds.button(skip_button, edit=True, enable=False)
+                cmds.warning("Reached end of joint chain, tool reset.")
+            else:                                           # select next joint
+                cmds.select(state["chain"][state["position"]], replace=True)
+
+            if not rename_info[6]:                          # clear user basename input
+                cmds.textFieldGrp(basename_field, edit=True, text="")
+
+        else: 
+            raise RuntimeError("Internal error: no mode set.")
+
 
     if cmds.window(window_id, exists=True):
         cmds.deleteUI(window_id)
@@ -263,6 +326,15 @@ def show_ui():
     cmds.columnLayout(adjustableColumn=True,columnOffset=["both", window_padding])
     cmds.separator(height=separator_padding*1.5, style="none")
 
+    mode_menu = cmds.optionMenu(
+        label="Mode",
+        width=half,
+        changeCommand=update_mode_status)
+    cmds.menuItem(label=mode_one)
+    cmds.menuItem(label=mode_all)
+
+    cmds.separator(height=separator_padding, style="none")
+
     basename_field = cmds.textFieldGrp(
         label=basename_label,
         text="",
@@ -276,6 +348,7 @@ def show_ui():
         ann="Check to preserve typed Basename between Rename passes",
         value=True
         )
+    
     cmds.setParent("..")
     cmds.separator(height=separator_padding, style="none")
 
@@ -328,15 +401,6 @@ def show_ui():
         
     cmds.setParent("..")
     cmds.setParent("..")
-    cmds.separator(height=10, style="none")
-    
-    mode_menu = cmds.optionMenu(
-        label="Mode",
-        width=half,
-        changeCommand=update_mode_status)
-    cmds.menuItem(label=mode_one)
-    cmds.menuItem(label=mode_all)
-
 
     cmds.separator(height=separator_padding, style="none")
 
