@@ -1,18 +1,53 @@
 
-# JOINT LRA
-## JOINT LOCAL ROTATION AXES VISIBILITY TOOL
+# JOINT LOCAL ROTATION AXES VISIBILITY TOOL
 
-this tool needs to toggle on/off rotation axes of:
+This tool manages the visibility of joint Local Rotation Axes (LRA) in Maya.
 
-- ALL joints in scene
-- selected joint
-- selected joint and its hierarchy
+It does not modify joint orientation, rotation values, or axis alignment in any way.
+The tool is intended to be used alongside Maya’s default Orient Joint tool, purely as a visual aid during rigging.
 
-actions:
+## Visibility Slider
 
-- force ON
-- force OFF
+- ON — show Local Rotation Axes
 
-rules:
+- OFF — hide Local Rotation Axes
 
-- joints only
+## Scope Options
+
+### Toggle Selected
+
+Applies the visibility action to all selected joints.
+
+### Toggle Hierarchy
+
+Applies the visibility action to:
+
+- the selected joint(s), and
+
+- all descendant joints in their hierarchy
+(Branching hierarchies are fully supported.)
+
+### Toggle All
+
+Applies the visibility action to all joints in the scene, regardless of selection.
+
+## Selection Rules & Error Handling
+
+- Selected and Hierarchy modes require an active selection.
+
+- If no joints are found within the chosen scope, the tool reports an error and performs no action.
+
+- Non-joint objects may be selected in Hierarchy mode, as long as joint descendants exist.
+
+
+## Limitations / Non-Goals
+
+This tool does NOT:
+
+- Validate joint orientation correctness.
+
+- Detect reversed or inconsistent axes.
+
+- Replace the Orient Joint tool.
+
+Its sole purpose is to ensure clear, consistent control over LRA visibility during iterative rigging work.
