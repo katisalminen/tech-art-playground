@@ -1,6 +1,7 @@
 
 import maya.cmds as cmds
 
+
 def toggle(mode: str, vis: int):
 
     if mode not in ("single", "hierarchy", "all"):
