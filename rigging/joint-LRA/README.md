@@ -1,6 +1,6 @@
 
-
-# JOINT ROTATION AXES VISIBILITY TOOL
+# JOINT LRA
+## JOINT LOCAL ROTATION AXES VISIBILITY TOOL
 
 this tool needs to toggle on/off rotation axes of:
 
@@ -10,7 +10,6 @@ this tool needs to toggle on/off rotation axes of:
 
 actions:
 
-- smart toggle (reverse state)
 - force ON
 - force OFF
 
