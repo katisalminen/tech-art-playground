@@ -65,6 +65,11 @@ This tool does not perform fully automatic or template-based naming. The user is
 - Choose whether you wish to skip naming joints that already appear named.
 
 
+### End Joint Naming
+
+- Choose whether the last joint in the chain should be given an end joint prefix, e.g. be_*.
+
+
 ## Example joint chains 
 
 1. `bn_l_hip01`

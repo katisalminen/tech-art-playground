@@ -1,11 +1,3 @@
-# ZERO JOINT ORIENTS TOOL
-
-Simple tool to zero out the joint orientation values. Typically needed for tidying up the end joints (be_*).
-
-No UI. Select joints -> click tool to zero out the orientations. Ignores non-joint selections and prints out how many joints were set to 0.
-
----
-
 # JOINT LOCAL ROTATION AXES VISIBILITY TOOL
 
 This tool manages the visibility of joint Local Rotation Axes (LRA) in Maya.
