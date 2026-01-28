@@ -160,7 +160,7 @@ def rename_all(
         basename: str,
         should_skip: bool,
         use_index: bool,
-        preserve_name: bool, # obsolete but idk
+        preserve_name: bool,
         end_joint: bool
         ) -> str:
     
