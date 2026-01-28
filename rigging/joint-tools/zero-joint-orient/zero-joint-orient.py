@@ -1,10 +1,10 @@
 
 import maya.cmds as cmds
 
-selection = cmds.ls(selection=True, type="joint", long=True)
+sel = cmds.ls(selection=True, type="joint", long=True)
 count = 0
 
-for n in selection:
+for n in sel:
     cmds.setAttr(f"{n}.jointOrientX", 0)
     cmds.setAttr(f"{n}.jointOrientY", 0)
     cmds.setAttr(f"{n}.jointOrientZ", 0)
