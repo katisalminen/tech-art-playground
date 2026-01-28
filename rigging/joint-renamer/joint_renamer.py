@@ -106,6 +106,7 @@ def rename_one(
         should_skip: bool,
         use_index: bool,
         keep_basename: bool,
+        end_joint_naming: bool,
         index: int,
         ) -> dict:
 
@@ -123,7 +124,7 @@ def rename_one(
     will_rename = not (already_named and should_skip)
     end_joint = chain[-1]
     is_end_joint = (joint == end_joint)
-    prefix = prefix if not is_end_joint else end_prefix
+    prefix = prefix if not is_end_joint or not end_joint_naming else end_prefix
 
     joint_dict = {
         "og_name": joint, 
@@ -159,7 +160,8 @@ def rename_all(
         basename: str,
         should_skip: bool,
         use_index: bool,
-        preserve_name: bool # obsolete but idk
+        preserve_name: bool, # obsolete but idk
+        end_joint: bool
         ) -> str:
     
     if not chain:
@@ -170,7 +172,7 @@ def rename_all(
 
     for joint in chain:
         # create a list of dictionaries for all joints using rename_one
-        entry = rename_one(chain, joint, prefix, side, region, basename, should_skip, use_index, True, index)
+        entry = rename_one(chain, joint, prefix, side, region, basename, should_skip, use_index, True, end_joint, index)
         if entry["will_rename"]:
             index += 1
         name_plan.append(entry)
@@ -238,7 +240,8 @@ def show_ui():
         skip_token = cmds.checkBox(skip_cb, query=True, value=True)
         index_token = cmds.checkBox(index_cb, query=True, value=True)
         preserve_basename_token = cmds.checkBox(keep_basename_cb, query=True, value=True)
-        return (prefix_token, side_token, region_token, basename_token, skip_token, index_token, preserve_basename_token)
+        end_joint_token = cmds.checkBox(endjoint_cb, query=True, value=True)
+        return (prefix_token, side_token, region_token, basename_token, skip_token, index_token, preserve_basename_token, end_joint_token)
         
 
     def onClose(*args):
@@ -401,6 +404,13 @@ def show_ui():
         value=True,
         ann="Skip joints that appear already named"
         )
+    
+    endjoint_cb = cmds.checkBox(
+        label="End Joint Naming",
+        width=half,
+        value=True,
+        ann="Auto-name last joint in the chain with be_ etc."
+    )
         
     cmds.setParent("..")
     cmds.setParent("..")
