@@ -5,6 +5,32 @@ import re
 import maya.cmds as cmds
     
 
+
+
+# define curve shape
+# circle, square, triangle, box, arrow
+
+# mode based on selection
+# no selection = default mode
+# joint selected = link mode
+
+
+# create control curve
+# name control curve
+# lock and hide scale and visibility
+
+# create control group
+# name control group
+
+# if mode = link, snap control group pivot to joint pivot
+# lock control group transforms, don't freeze
+
+
+
+
+
+
+
 # renaming helper
 
 def get_unique_name(base_name: str, start: int = 1, pad: int = 2) -> str:
@@ -40,7 +66,7 @@ def create_control():
             f"Joint '{joint}' uses Maya default naming - please rename."
             )
         
-        mode = "joint"
+        mode = "link"
 
     else:
         raise RuntimeError(f"Multiple items selected: {sel}")
@@ -61,7 +87,7 @@ def create_control():
         new_name = get_unique_name("anim_control")
         ctrl = cmds.rename(ctrl, new_name)
 
-    elif mode == "joint":
+    elif mode == "link":
         if short_name.startswith("bn_"):
             ctrl = cmds.rename()
 

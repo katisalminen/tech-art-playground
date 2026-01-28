@@ -9,10 +9,12 @@ pf_dict = {
     "Default": "bn_",
     "Hair": "hbn_",
     "Eyelid": "ebn_",
+    "Face": "fbn_",
 
     "End bone": "be_",
     "Hair end bone": "hbe_",
-    "Eyelid end bone": "ebe_"
+    "Eyelid end bone": "ebe_",
+    "Face end bone": "fbn_"
     }
 
 pf_all_joints = tuple(pf_dict.values())
@@ -21,6 +23,7 @@ pf_end_swap = {
     pf_dict["Default"]: pf_dict["End bone"],
     pf_dict["Hair"]: pf_dict["Hair end bone"],
     pf_dict["Eyelid"]: pf_dict["Eyelid end bone"],
+    pf_dict["Face"]: pf_dict["Face end bone"]
     }
 
 side_dict = {
