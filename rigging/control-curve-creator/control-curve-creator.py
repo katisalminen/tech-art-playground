@@ -1,130 +1,36 @@
 
-# CONTROL CIRCLE -- start of control creation tool
-
 import re
 import functools as ft
 import maya.cmds as cmds
-    
-
-
-
-
-# create control curve
-
-def create_control():
-
-    # selection: 1 item, multiple, or none
-
-    sel = cmds.ls(selection=True)
-    joint = None
-
-    if not sel:
-        mode = "default"
-
-    elif len(sel) == 1:
-        joint = sel[0]
-
-        if cmds.nodeType(joint) != "joint":
-            raise RuntimeError("Please select exactly one joint, or nothing.")
-        
-        # check for default Maya joint naming
-        short_name = joint.split(":")[-1]
-        if re.match(r"^joint\d+$", short_name):
-            raise RuntimeError("" \
-            f"Joint '{joint}' uses Maya default naming - please rename."
-            )
-        
-        mode = "snap"
-
-    else:
-        raise RuntimeError(f"Multiple items selected: {sel}")
-    
-    return mode
-
-    # create control
-
-    ctrl = cmds.circle(nr=(0, 1, 0), r=20, ch=False)[0]
-
-    shapes = cmds.listRelatives(ctrl, shapes=True, fullPath=True) or []
-    if not shapes:
-        raise RuntimeError(f"No shape found under control: {ctrl}")
-
-    shape = shapes[0]
-
-    # rename control
-
-    if mode == "default":
-        new_name = increment_name("anim_control")
-        ctrl = cmds.rename(ctrl, new_name)
-
-    elif mode == "snap":
-        if short_name.startswith("bn_"):
-            ctrl = cmds.rename()
-
-    else:
-        raise RuntimeError("Invalid mode for renaming.")
-    
-    # create offset group
-
-
-    # if joint selected, snap offset group to joint, lock offset group attributes
-
-    
-    
-
-    # enable drawing overrides
-    if not shape or not cmds.objExists(shape):
-        raise RuntimeError(f"Shape node not found: {shape}")
-    
-    cmds.setAttr(f"{shape}.overrideEnabled", 1)
-    cmds.setAttr(f"{shape}.overrideRGBColors", 0)
-    cmds.setAttr(f"{shape}.overrideColor", 13) # red
-
-
-# name control curve
-# lock and hide scale and visibility
-
-# create control group
-# name control group
-
-# if mode = snap, snap control group pivot to joint pivot
-# lock control group transforms, don't freeze
-
-
-###########################################
-
 
 shape = ""
 mode = ""
 joint_name = ""
 
+side_colors = {
+    "Center": 13,
+    "Left": 17,
+    "Right": 18
+}
 
 # mode definer
 def validate():
-    sel = cmds.ls(sl=True,type="joint")
+    sel = cmds.ls(sl=True,type="joint",sn=True)
 
     if len(sel) > 1:
         raise RuntimeError("Multiple joints selected.")
     
     elif len(sel) == 1:
-        short_name = sel[0].split(":")[-1]
-
-        if re.match(r"^joint\d+$", short_name):
-            cmds.warning(
-            f"Selection '{sel[0]}' uses Maya default naming - please rename."
-            )
-        
+        short_name = sel[0].split(":")[-1]        
         mode = "snap"
 
     else:
         short_name = None
         mode = "default"
 
-
     return mode, short_name
 
-### shape functions
-
+# shape functions
 def create_circle():
     return cmds.circle(nr=(0, 1, 0), r=20, ch=False)[0]
 def create_square():
@@ -138,8 +44,35 @@ def create_arrow():
 def create_cross():
     pass
 
-### control shape namer
+# control curve registry: labels and functions
+ctrl_registry = [
 
+[("Circle", create_circle), 
+("Square", create_square), 
+("Triangle", create_triangle)],
+
+[("Box", create_box), 
+("Arrow", create_arrow), 
+("Cross", create_cross)]
+
+]
+
+## lock transforms
+def lock_trs(node):
+    for attr in ("tx", "ty", "tz", "rx", "ry", "rz", "sx", "sy", "sz"):
+        cmds.setAttr(f"{node}.{attr}", lock=True)
+
+## lock and hide scale and visibility
+def lock_hide_sv(node):
+    for attr in ("sx", "sy", "sz", "v"):
+        cmds.setAttr(
+            f"{node}.{attr}",
+            lock=True,
+            keyable=False,
+            channelBox=False
+        )
+
+### control shape naming
 def increment_name(base_name: str, start: int = 1, pad: int = 2) -> str:
     i = start
     
@@ -150,17 +83,13 @@ def increment_name(base_name: str, start: int = 1, pad: int = 2) -> str:
         i += 1
     return candidate
 
-
 def ctrl_name(mode, ctrl, joint_name):
 
     if mode == "default":
         new_name = increment_name("anim_control")
 
     elif mode == "snap":
-        if joint_name.startswith("bn_"):
-            basename = joint_name.replace("bn_", "anim_", 1)
-        else:
-            basename = f"anim_{joint_name}"
+        basename = joint_name.replace("bn_", "anim_", 1) if joint_name.startswith("bn_") else f"anim_{joint_name}"
 
         if not cmds.objExists(basename):
             new_name = basename
@@ -174,21 +103,53 @@ def ctrl_name(mode, ctrl, joint_name):
     
     return new_name
 
-### control curve registry: labels and functions
-
-ctrl_registry = [
-
-[("Circle", create_circle), 
-("Square", create_square), 
-("Triangle", create_triangle)],
-
-[("Box", create_box), 
-("Arrow", create_arrow), 
-("Cross", create_cross)]
-
-]
 
 
+### offset group
+def create_offset_group(ctrl, mode, sel):
+    os_group = cmds.group(ctrl, n=f"{ctrl}_offset")
+
+    if mode == "snap":
+        constr = cmds.parentConstraint(sel, os_group, mo=False)
+        cmds.delete(constr)
+        rz = cmds.getAttr(f"{os_group}.rz")
+        cmds.setAttr(f"{os_group}.rz", rz + 90.0)
+        lock_trs(os_group)
+
+    return os_group
+
+
+### drawing overrides
+def resolve_color(ctrl, side_token):
+    if side_token != "Auto":
+        return side_colors[side_token]
+    
+    tx = cmds.xform(ctrl, q=True, t=True, ws=True)[0]
+
+    EPS = 1e-4
+    if abs(tx) <= EPS:
+        resolved = "Center"
+    elif tx > 0:
+        resolved = "Left"
+    else:
+        resolved = "Right"
+    return side_colors[resolved]
+
+def set_drawing_or(ctrl, side_token):
+    shapes = cmds.listRelatives(ctrl, shapes=True, fullPath=True) or []
+    if not shapes:
+        raise RuntimeError(f"No shape found under control: {ctrl}")
+    shape = shapes[0]
+
+    color_id = resolve_color(ctrl, side_token)
+
+    cmds.setAttr(f"{shape}.overrideEnabled", 1)
+    cmds.setAttr(f"{shape}.overrideRGBColors", 0)
+    cmds.setAttr(f"{shape}.overrideColor", color_id)
+
+        
+
+# WINDOW
 def showUI():
 
 ### UI style
@@ -215,29 +176,15 @@ def showUI():
         cmds.deleteUI(w_id)
 
     def onClick(label, create_fn, *args):
-
+        side_token = cmds.optionMenuGrp(side_dd, query=True, value=True)
         mode, joint_name = validate()
-        print(f"\nControl creator mode: {mode}, joint name: {joint_name}")
-
         ctrl = create_fn()
-        print(f"Shape created: {label} with function '{create_fn}'")
-
         name = ctrl_name(mode, ctrl, joint_name)
-        print(f"Shape name: {name}")
+        lock_hide_sv(name)
+        create_offset_group(name, mode, joint_name)
+        color = set_drawing_or(name, side_token)
 
-        # create control group
-        # enable drawing overrides
-        # if joint selected, snap offset group to joint, lock offset group attributes
-
-
-
-
-
-### curve creation
-    
-    def create_control(control_id: str):
-
-        pass            
+        print(f"Created control shape {label} named {name} with {mode} mode.")        
 
 ### create window
 
