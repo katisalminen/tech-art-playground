@@ -1,5 +1,4 @@
 
-import re
 import functools as ft
 import maya.cmds as cmds
 
@@ -13,36 +12,55 @@ side_colors = {
     "Right": 18
 }
 
+side_labels = ["Auto","Center","Right","Left"]
+
 # mode definer
 def validate():
     sel = cmds.ls(sl=True,type="joint",sn=True)
+    mode = "default" if not sel else "snap"
 
-    if len(sel) > 1:
-        raise RuntimeError("Multiple joints selected.")
-    
-    elif len(sel) == 1:
-        short_name = sel[0].split(":")[-1]        
-        mode = "snap"
-
-    else:
-        short_name = None
-        mode = "default"
-
-    return mode, short_name
+    return mode, sel
 
 # shape functions
-def create_circle():
-    return cmds.circle(nr=(0, 1, 0), r=20, ch=False)[0]
-def create_square():
-    pass
-def create_triangle():
-    pass
-def create_box():
-    pass
-def create_arrow():
-    pass
-def create_cross():
-    pass
+def create_circle(s):
+    return cmds.circle(nr=(0, 1, 0), r=s, ch=False)[0]
+def create_square(s):
+    return cmds.curve(d=1, p=[(-s,0,s), (s,0,s), (s,0,-s), (-s,0,-s), (-s,0,s)])
+def create_triangle(s):
+    return cmds.curve(d=1, p=[(0,0,-s), (-s,0,s), (s,0,s), (0,0,-s)])
+def create_box(s):
+    s *= 0.75
+    v = [
+        (-s, -s, -s),(-s, -s,  s),
+        ( s, -s,  s),( s, -s, -s),
+        (-s,  s, -s),(-s,  s,  s),
+        ( s,  s,  s),( s,  s, -s)]
+    path = [0, 1, 2, 3, 0, 4, 5, 1, 2, 6, 5, 4, 7, 3, 2, 6, 7]
+    pts = [v[i] for i in path]
+    return cmds.curve(d=1, p=pts)
+def create_arrow(s):
+    s *= 0.5
+    return cmds.curve(
+        d=1,
+        p=[
+            (-1*s, 0,  3*s),( 1*s, 0,  3*s),
+            ( 1*s, 0,  0*s),( 2*s, 0,  0*s),
+            ( 0  , 0, -3*s),(-2*s, 0,  0*s),
+            (-1*s, 0,  0*s),(-1*s, 0,  3*s)])
+
+def create_cross(s):
+    s *= 0.5
+    return cmds.curve(
+        d=1,
+        p=[
+            ( 1*s, 0, -3*s),(-1*s, 0, -3*s),
+            (-1*s, 0, -1*s),(-3*s, 0, -1*s),
+            (-3*s, 0,  1*s),(-1*s, 0,  1*s),
+            (-1*s, 0,  3*s),( 1*s, 0,  3*s),
+            ( 1*s, 0,  1*s),( 3*s, 0,  1*s),
+            ( 3*s, 0, -1*s),( 1*s, 0, -1*s),
+            ( 1*s, 0, -3*s)])
+
 
 # control curve registry: labels and functions
 ctrl_registry = [
@@ -147,6 +165,14 @@ def set_drawing_or(ctrl, side_token):
     cmds.setAttr(f"{shape}.overrideRGBColors", 0)
     cmds.setAttr(f"{shape}.overrideColor", color_id)
 
+### control set-up: holds all control creation related functions
+def ctrl_setup(create_fn, scale_token, mode, joint, side_token):
+    ctrl = create_fn(scale_token)
+    short_name = joint.split(":")[-1] if mode == "snap" else []
+    name = ctrl_name(mode, ctrl, short_name)
+    create_offset_group(name, mode, joint)
+    set_drawing_or(name, side_token)
+    return name
         
 
 # WINDOW
@@ -157,7 +183,7 @@ def showUI():
     w_id = "ccc"
     w_title = "Control Curve Creator"
     w_width = 250
-    w_height = 170
+    w_height = 225
     w_pad = w_width//12
     gap = w_pad//4
     w_content = w_width - w_pad*2
@@ -175,16 +201,23 @@ def showUI():
     def onClose(*args):
         cmds.deleteUI(w_id)
 
-    def onClick(label, create_fn, *args):
+    def onClick(create_fn, *args):
         side_token = cmds.optionMenuGrp(side_dd, query=True, value=True)
-        mode, joint_name = validate()
-        ctrl = create_fn()
-        name = ctrl_name(mode, ctrl, joint_name)
-        lock_hide_sv(name)
-        create_offset_group(name, mode, joint_name)
-        color = set_drawing_or(name, side_token)
+        scale_token = cmds.floatSlider(scale_slider, query=True, value=True)
+        mode, joint_list = validate()
+        if mode == "snap":
+            ctrl_list = []
+            for joint in joint_list:
+                ctrl_list += ctrl_setup(create_fn, scale_token, mode, joint, side_token)
+        else:
+            joint = []
+            ctrl_setup(create_fn, scale_token, mode, joint, side_token)
 
-        print(f"Created control shape {label} named {name} with {mode} mode.")        
+    def onFreeze(*args):
+        pass
+
+    def onMirror(*args):
+        pass
 
 ### create window
 
@@ -199,11 +232,10 @@ def showUI():
     sep()
 
     cmds.rowLayout(adj=True,nc=3)
-
-    cmds.columnLayout(adj=True, w=(half-gap))
+    cmds.columnLayout(adj=True, w=half-gap)
 
     for c in ctrl_registry[0]:
-        cmds.button(l=c[0],c=ft.partial(onClick, c[0], c[1]))
+        cmds.button(l=c[0],c=ft.partial(onClick, c[1]))
         sep()
 
     par()
@@ -212,21 +244,43 @@ def showUI():
     par()
     cmds.columnLayout(adj=True, w=(half-gap))
     for c in ctrl_registry[1]:
-        cmds.button(l=c[0],c=ft.partial(onClick, c[0], c[1]))
+        cmds.button(l=c[0],c=ft.partial(onClick, c[1]))
         sep()
 
     par()
     par()
+    sep()
 
+    side_dd = cmds.optionMenuGrp(
+        l="Side", 
+        cw=(1,half//4),
+        ann="Affects drawing overrides")
+    for item in side_labels:
+        cmds.menuItem(l=item)
     sep()
-    side_dd = cmds.optionMenuGrp(l="Side", cw=(1,half//4),ann="Affects drawing overrides")
-    cmds.menuItem(l="Auto")
-    cmds.menuItem(l="Center")
-    cmds.menuItem(l="Left")
-    cmds.menuItem(l="Right")
 
+    cmds.rowLayout(adj=True, nc=2)
+    cmds.columnLayout(adj=True)
+    cmds.text(l="Control Size")
+    par()
+    cmds.columnLayout(adj=True)
+    scale_slider = cmds.floatSlider(min=5.0, max=50.0, v=15.0, w=half)
+    par()
+    par()
     sep()
+
+    cmds.rowLayout(adj=True, nc=3)
+    cmds.columnLayout(adj=True, w=half-gap)
+    freeze_b = cmds.button(l="Freeze",c=onFreeze)
+    par()
+    cmds.columnLayout(adj=True,w=gap)
+    par()
+    cmds.columnLayout(adj=True,w=half-gap)
+    mirror_b = cmds.button(l="Mirror",c=onMirror)
+    par()
+    par()
     sep()
+
     cmds.button(l="Close",c=onClose)
 
 showUI()
