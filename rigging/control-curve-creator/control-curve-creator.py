@@ -213,8 +213,38 @@ def showUI():
             joint = []
             ctrl_setup(create_fn, scale_token, mode, joint, side_token)
 
+    def is_locked():
+        cmds.getAttr(f"")
+
     def onFreeze(*args):
-        pass
+        sel = cmds.ls(sl=True, long=True)
+        result = []
+
+        if not sel:
+            return
+        else:
+            for node in sel:
+                curves = cmds.listRelatives(node, shapes=True, type="nurbsCurve")
+                if curves:
+                    result.append(node)
+                else:
+                    cmds.warning("No valid selection.")
+                    return
+
+        check = {"t": False, "r": False, "s": False}
+        for attr in ("tx", "ty", "tz", "rx", "ry", "rz", "sx", "sy", "sz"):
+            letter = attr[0]
+            current = check[letter]
+            check[letter] = cmds.getAttr(f"{result}.{attr}", lock=True) if not current else True
+            
+        for attr in check:
+            cmds.makeIdentity(result, a=True, **attr) if attr else pass
+        
+
+        # , "rx", "ry", "rz", "sx", "sy", "sz"):
+        # loop through attributes
+        # if not locked, freeze transformations, otherwise pass
+
 
     def onMirror(*args):
         pass
