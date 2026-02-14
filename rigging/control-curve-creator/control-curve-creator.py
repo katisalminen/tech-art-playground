@@ -15,11 +15,13 @@ side_colors = {
 side_labels = ["Auto","Center","Right","Left"]
 
 # mode definer
-def validate():
+def validate_mode():
     sel = cmds.ls(sl=True,type="joint",sn=True)
     mode = "default" if not sel else "snap"
 
     return mode, sel
+
+
 
 # shape functions
 def create_circle(s):
@@ -75,20 +77,36 @@ ctrl_registry = [
 
 ]
 
-## lock transforms
-def lock_trs(node):
-    for attr in ("tx", "ty", "tz", "rx", "ry", "rz", "sx", "sy", "sz"):
-        cmds.setAttr(f"{node}.{attr}", lock=True)
 
-## lock and hide scale and visibility
-def lock_hide_sv(node):
-    for attr in ("sx", "sy", "sz", "v"):
-        cmds.setAttr(
-            f"{node}.{attr}",
-            lock=True,
-            keyable=False,
-            channelBox=False
-        )
+# freeze, lock, hide master function
+def lock_hide_freeze(do_lock, do_hide, freeze, curve, trs):
+    if not curve:
+        cmds.warning(f"Invalid target: {curve}.")
+        return
+    
+    if isinstance(trs, str):
+        trs = ["t", "r", "s"] if trs == "all" else [trs]
+    trs = list(dict.fromkeys(
+        t[:-1] if len(t) == 2 else t 
+        for t in trs))
+    allowed_trs = {"t", "r", "s"}
+    trs = [n for n in trs if n in allowed_trs]
+    if not trs:
+        raise RuntimeError("Invalid transformation token.")
+                
+    for tform in trs:
+        if freeze:
+            cmds.makeIdentity(curve, a=True, **{tform: True})
+        for letter in ("x", "y", "z"):
+            if do_lock:
+                cmds.setAttr(f"{curve}.{tform}{letter}", lock=True)
+            if do_hide:
+                cmds.setAttr(
+                    f"{curve}.{tform}{letter}",
+                    channelBox=False,
+                    keyable=False
+                    )
+        
 
 ### control shape naming
 def increment_name(base_name: str, start: int = 1, pad: int = 2) -> str:
@@ -102,25 +120,19 @@ def increment_name(base_name: str, start: int = 1, pad: int = 2) -> str:
     return candidate
 
 def ctrl_name(mode, ctrl, joint_name):
-
     if mode == "default":
         new_name = increment_name("anim_control")
-
     elif mode == "snap":
         basename = joint_name.replace("bn_", "anim_", 1) if joint_name.startswith("bn_") else f"anim_{joint_name}"
-
         if not cmds.objExists(basename):
             new_name = basename
         else:
-            new_name = increment_name(basename)
-            
+            new_name = increment_name(basename)     
     else:
         raise RuntimeError(f"Invalid mode: {mode}")
     
     cmds.rename(ctrl, new_name)
-    
     return new_name
-
 
 
 ### offset group
@@ -130,9 +142,7 @@ def create_offset_group(ctrl, mode, sel):
     if mode == "snap":
         constr = cmds.parentConstraint(sel, os_group, mo=False)
         cmds.delete(constr)
-        rz = cmds.getAttr(f"{os_group}.rz")
-        cmds.setAttr(f"{os_group}.rz", rz + 90.0)
-        lock_trs(os_group)
+        lock_hide_freeze(True, True, False, os_group, "all")
 
     return os_group
 
@@ -174,6 +184,48 @@ def ctrl_setup(create_fn, scale_token, mode, joint, side_token):
     set_drawing_or(name, side_token)
     return name
         
+# mirror validation
+def mirror_validate(sel: list) -> list:
+    targets = []
+    for name in sel:
+        if "offset" in name:
+            targets.append(name)
+        else:
+            parents = cmds.listRelatives(name, p=True, f=True)
+            if not parents:
+                pass
+            while True:
+                candidates = []
+                for candidate in parents:
+                    if "offset" in candidate:
+                        candidates.append(candidate)
+                if len(candidates) > 1:
+                    raise RuntimeError(f"Error: {name} has multiple offset groups.")
+                if not candidates:
+                    parents = cmds.listRelatives(candidate, p=True, f=True)
+                else:
+                    targets.append(candidate)
+                    break
+    return targets
+
+# mirror name fix
+
+def fix_mirror_naming(grp):
+
+    rename = cmds.listRelatives(grp, ad=True, f=True) or []
+    rename.append(grp)
+
+    swapped = [
+        n.replace("_l_", "_r_") if "_l_" in n
+        else n.replace("_r_", "_l_") if "_r_" in n
+        else n
+        for n in rename
+    ]
+
+    for old, new in zip(rename, swapped):
+        cmds.rename(old, new.split("|")[-1])
+
+
 
 # WINDOW
 def showUI():
@@ -201,58 +253,60 @@ def showUI():
     def onClose(*args):
         cmds.deleteUI(w_id)
 
+
     def onClick(create_fn, *args):
         side_token = cmds.optionMenuGrp(side_dd, query=True, value=True)
         scale_token = cmds.floatSlider(scale_slider, query=True, value=True)
-        mode, joint_list = validate()
+        mode, joint_list = validate_mode()
         if mode == "snap":
             ctrl_list = []
             for joint in joint_list:
-                ctrl_list += ctrl_setup(create_fn, scale_token, mode, joint, side_token)
+                ctrl_list.append(ctrl_setup(create_fn, scale_token, mode, joint, side_token))
+            cmds.select(ctrl_list, replace=True)
         else:
             joint = []
             ctrl_setup(create_fn, scale_token, mode, joint, side_token)
 
-    def is_locked():
-        cmds.getAttr(f"")
 
     def onFreeze(*args):
         sel = cmds.ls(sl=True, long=True)
-        result = []
-
         if not sel:
             return
-        else:
-            for node in sel:
-                curves = cmds.listRelatives(node, shapes=True, type="nurbsCurve")
-                if curves:
-                    result.append(node)
-                else:
-                    cmds.warning("No valid selection.")
-                    return
 
-        check = {"t": False, "r": False, "s": False}
-        for attr in ("tx", "ty", "tz", "rx", "ry", "rz", "sx", "sy", "sz"):
-            letter = attr[0]
-            current = check[letter]
-            check[letter] = cmds.getAttr(f"{result}.{attr}", lock=True) if not current else True
-            
-        for attr in check:
-            cmds.makeIdentity(result, a=True, **attr) if attr else pass
+        for node in sel:
+            if not cmds.listRelatives(node, shapes=True, type="nurbsCurve"):
+                cmds.warning("Invalid selection.")
+                return
+
+        for member in sel:
+            to_freeze = []
+            for letter in ("tx", "ty", "tz", "rx", "ry", "rz", "sx", "sy", "sz"):
+                if cmds.getAttr(f"{member}.{letter}", lock=False):
+                    to_freeze.append(letter)
+            lock_hide_freeze(False, False, True, member, to_freeze)
         
 
-        # , "rx", "ry", "rz", "sx", "sy", "sz"):
-        # loop through attributes
-        # if not locked, freeze transformations, otherwise pass
-
-
     def onMirror(*args):
-        pass
+        sel = cmds.ls(sl=True, long=True)
+        og_groups = mirror_validate(sel)
+        new_groups = cmds.duplicate(og_groups, f=True)
+        for node in new_groups:
+            grp = cmds.group(node, n=f"{node}_mirror")
+            cmds.xform(grp, ws=True, rp=(0,0,0), sp=(0,0,0))
+            cmds.setAttr(f"{grp}.sx", -1)
+            lock_hide_freeze(False, False, False, grp, "all")
+            fix_mirror_naming(grp)
+                    
+
+
+
+
+
 
 ### create window
 
-    if cmds.window("ccc",exists=True):
-        cmds.deleteUI("ccc")
+    if cmds.window(w_id,exists=True):
+        cmds.deleteUI(w_id)
 
     cmds.window(w_id, t=w_title, wh=[w_width, w_height], s=False)
     cmds.showWindow(w_id)
