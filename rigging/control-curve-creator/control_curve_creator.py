@@ -14,15 +14,6 @@ side_colors = {
 
 side_labels = ["Auto","Center","Right","Left"]
 
-# mode definer
-def validate_mode():
-    sel = cmds.ls(sl=True,type="joint",sn=True)
-    mode = "default" if not sel else "snap"
-
-    return mode, sel
-
-
-
 # shape functions
 def create_circle(s):
     return cmds.circle(nr=(0, 1, 0), r=s, ch=False)[0]
@@ -49,7 +40,6 @@ def create_arrow(s):
             ( 1*s, 0,  0*s),( 2*s, 0,  0*s),
             ( 0  , 0, -3*s),(-2*s, 0,  0*s),
             (-1*s, 0,  0*s),(-1*s, 0,  3*s)])
-
 def create_cross(s):
     s *= 0.5
     return cmds.curve(
@@ -66,17 +56,18 @@ def create_cross(s):
 
 # control curve registry: labels and functions
 ctrl_registry = [
-
 [("Circle", create_circle), 
 ("Square", create_square), 
 ("Triangle", create_triangle)],
-
 [("Box", create_box), 
 ("Arrow", create_arrow), 
-("Cross", create_cross)]
+("Cross", create_cross)]]
 
-]
-
+# mode definer
+def validate_mode():
+    sel = cmds.ls(sl=True,type="joint",sn=True)
+    mode = "default" if not sel else "snap"
+    return mode, sel
 
 # freeze, lock, hide master function
 def lock_hide_freeze(do_lock, do_hide, freeze, curve, trs):
@@ -90,7 +81,7 @@ def lock_hide_freeze(do_lock, do_hide, freeze, curve, trs):
         t[:-1] if len(t) == 2 else t 
         for t in trs))
     allowed_trs = {"t", "r", "s"}
-    trs = [n for n in trs if n in allowed_trs]
+    trs = [t for t in trs if t in allowed_trs]
     if not trs:
         raise RuntimeError("Invalid transformation token.")
                 
@@ -99,7 +90,10 @@ def lock_hide_freeze(do_lock, do_hide, freeze, curve, trs):
             cmds.makeIdentity(curve, a=True, **{tform: True})
         for letter in ("x", "y", "z"):
             if do_lock:
-                cmds.setAttr(f"{curve}.{tform}{letter}", lock=True)
+                cmds.setAttr(
+                    f"{curve}.{tform}{letter}",
+                    lock=True
+                    )
             if do_hide:
                 cmds.setAttr(
                     f"{curve}.{tform}{letter}",
@@ -107,8 +101,8 @@ def lock_hide_freeze(do_lock, do_hide, freeze, curve, trs):
                     keyable=False
                     )
         
-
-### control shape naming
+# CTRL CURVE CREATION FUNCTIONS
+## control shape naming
 def increment_name(base_name: str, start: int = 1, pad: int = 2) -> str:
     i = start
     
@@ -134,8 +128,7 @@ def ctrl_name(mode, ctrl, joint_name):
     cmds.rename(ctrl, new_name)
     return new_name
 
-
-### offset group
+## offset group
 def create_offset_group(ctrl, mode, sel):
     os_group = cmds.group(ctrl, n=f"{ctrl}_offset")
 
@@ -146,8 +139,7 @@ def create_offset_group(ctrl, mode, sel):
 
     return os_group
 
-
-### drawing overrides
+## drawing overrides
 def resolve_color(ctrl, side_token):
     if side_token != "Auto":
         return side_colors[side_token]
@@ -175,7 +167,7 @@ def set_drawing_or(ctrl, side_token):
     cmds.setAttr(f"{shape}.overrideRGBColors", 0)
     cmds.setAttr(f"{shape}.overrideColor", color_id)
 
-### control set-up: holds all control creation related functions
+## control set-up: holds all control creation related functions
 def ctrl_setup(create_fn, scale_token, mode, joint, side_token):
     ctrl = create_fn(scale_token)
     short_name = joint.split(":")[-1] if mode == "snap" else []
@@ -183,8 +175,9 @@ def ctrl_setup(create_fn, scale_token, mode, joint, side_token):
     create_offset_group(name, mode, joint)
     set_drawing_or(name, side_token)
     return name
-        
-# mirror validation
+
+# MIRROR FUNCTIONS
+## mirror validation
 def mirror_validate(sel: list) -> list:
     targets = []
     for name in sel:
@@ -193,45 +186,39 @@ def mirror_validate(sel: list) -> list:
         else:
             parents = cmds.listRelatives(name, p=True, f=True)
             if not parents:
-                pass
-            while True:
-                candidates = []
-                for candidate in parents:
-                    if "offset" in candidate:
-                        candidates.append(candidate)
-                if len(candidates) > 1:
-                    raise RuntimeError(f"Error: {name} has multiple offset groups.")
-                if not candidates:
-                    parents = cmds.listRelatives(candidate, p=True, f=True)
-                else:
-                    targets.append(candidate)
-                    break
+                raise RuntimeError("Select a control curve or its control group.")
+            candidates = []
+            for candidate in parents:
+                if "offset" in candidate:
+                    candidates.append(candidate)
+            if len(candidates) > 1:
+                raise RuntimeError(f"Error: {name} has multiple offset groups.")
+            if not candidates:
+                raise RuntimeError("Selected curve has no offset group!")
+            else:
+                targets.append(candidate)     
     return targets
 
-# mirror name fix
+## mirror name fix
+def fix_mirror_naming(old, new) -> str:
 
-def fix_mirror_naming(grp):
-
-    rename = cmds.listRelatives(grp, ad=True, f=True) or []
-    rename.append(grp)
-
-    swapped = [
-        n.replace("_l_", "_r_") if "_l_" in n
-        else n.replace("_r_", "_l_") if "_r_" in n
-        else n
-        for n in rename
-    ]
-
-    for old, new in zip(rename, swapped):
-        cmds.rename(old, new.split("|")[-1])
+    olds = (cmds.listRelatives(old, ad=True, f=True) or []) + [old]
+    news = (cmds.listRelatives(new, ad=True, f=True) or []) + [new]
+    if len(olds) != len(news):
+        cmds.warning("Naming issue: check naming of mirrored objects.")
+    
+    for a, b in zip(olds, news):
+        newname = a.replace("_l_", "_r_") if "_l_" in a else a.replace("_r_", "_l_") if "_r_" in a else a
+        parent = cmds.rename(b, newname.split("|")[-1])
+        
+    return parent
 
 
 
 # WINDOW
-def showUI():
+def show_ui():
 
-### UI style
-
+## UI style
     w_id = "ccc"
     w_title = "Control Curve Creator"
     w_width = 250
@@ -247,12 +234,9 @@ def showUI():
     def par():
         cmds.setParent("..")
 
-
-### button functions
-
+## button functions
     def onClose(*args):
         cmds.deleteUI(w_id)
-
 
     def onClick(create_fn, *args):
         side_token = cmds.optionMenuGrp(side_dd, query=True, value=True)
@@ -267,17 +251,14 @@ def showUI():
             joint = []
             ctrl_setup(create_fn, scale_token, mode, joint, side_token)
 
-
     def onFreeze(*args):
         sel = cmds.ls(sl=True, long=True)
         if not sel:
             return
-
         for node in sel:
             if not cmds.listRelatives(node, shapes=True, type="nurbsCurve"):
                 cmds.warning("Invalid selection.")
                 return
-
         for member in sel:
             to_freeze = []
             for letter in ("tx", "ty", "tz", "rx", "ry", "rz", "sx", "sy", "sz"):
@@ -285,25 +266,19 @@ def showUI():
                     to_freeze.append(letter)
             lock_hide_freeze(False, False, True, member, to_freeze)
         
-
     def onMirror(*args):
-        sel = cmds.ls(sl=True, long=True)
+        sel = cmds.ls(sl=True, long=False)
         og_groups = mirror_validate(sel)
-        new_groups = cmds.duplicate(og_groups, f=True)
-        for node in new_groups:
-            grp = cmds.group(node, n=f"{node}_mirror")
-            cmds.xform(grp, ws=True, rp=(0,0,0), sp=(0,0,0))
-            cmds.setAttr(f"{grp}.sx", -1)
-            lock_hide_freeze(False, False, False, grp, "all")
-            fix_mirror_naming(grp)
+        new_groups = cmds.duplicate(og_groups, rr=True, rc=True)
+        for old, new in zip(og_groups, new_groups):
+            new_os_grp = fix_mirror_naming(old, new)
+            mirror_grp = cmds.group(new_os_grp, n=f"{new_os_grp}_mirror")
+            cmds.xform(mirror_grp, ws=True, rp=(0,0,0), sp=(0,0,0))
+            cmds.setAttr(f"{mirror_grp}.sx", -1)
+            lock_hide_freeze(True, True, False, mirror_grp, "all")
                     
 
-
-
-
-
-
-### create window
+## create window
 
     if cmds.window(w_id,exists=True):
         cmds.deleteUI(w_id)
@@ -367,7 +342,7 @@ def showUI():
 
     cmds.button(l="Close",c=onClose)
 
-showUI()
+show_ui()
 
 
 
