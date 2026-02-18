@@ -5,6 +5,7 @@ import maya.cmds as cmds
 shape = ""
 mode = ""
 joint_name = ""
+attr = ["Translate", "Rotate", "Scale"]
 
 side_colors = {
     "Center": 13,
@@ -70,15 +71,14 @@ def validate_mode():
     return mode, sel
 
 # freeze, lock, hide master function
-def lock_hide_freeze(do_lock, do_hide, freeze, curve, trs):
-    if not curve:
-        cmds.warning(f"Invalid target: {curve}.")
+def lock_hide_freeze(do_lock, do_hide, freeze, target, trs):
+    if not target:
         return
     
     if isinstance(trs, str):
-        trs = ["t", "r", "s"] if trs == "all" else [trs]
+        trs = ["t", "r", "s"] if trs == "all" else [trs.lower()]
     trs = list(dict.fromkeys(
-        t[:-1] if len(t) == 2 else t 
+        t[0] if len(t) > 1 else t 
         for t in trs))
     allowed_trs = {"t", "r", "s"}
     trs = [t for t in trs if t in allowed_trs]
@@ -87,19 +87,41 @@ def lock_hide_freeze(do_lock, do_hide, freeze, curve, trs):
                 
     for tform in trs:
         if freeze:
-            cmds.makeIdentity(curve, a=True, **{tform: True})
+            cmds.makeIdentity(target, a=True, **{tform: True})
         for letter in ("x", "y", "z"):
             if do_lock:
                 cmds.setAttr(
-                    f"{curve}.{tform}{letter}",
+                    f"{target}.{tform}{letter}",
                     lock=True
                     )
             if do_hide:
                 cmds.setAttr(
-                    f"{curve}.{tform}{letter}",
+                    f"{target}.{tform}{letter}",
                     channelBox=False,
                     keyable=False
                     )
+                
+def check_transforms(target: str, trs: str):
+    tform = trs.lower()
+    tform_short = tform[0]
+    basenumber = 0 if tform_short in ("t", "r") else 1
+
+    # check unfrozen values, locked, hidden+keyable
+
+    transforms = []
+    for axis in ("X", "Y", "Z"):
+        info = {
+            "freeze": True if cmds.getAttr(f"{target}.{tform}{axis}") == basenumber else False
+                                   
+        }
+
+        if cmds.getAttr(f"{target}.{tform}{axis}") != basenumber:
+            cmds.select(target, replace=True)
+            return
+                
+    return 
+
+
         
 # CTRL CURVE CREATION FUNCTIONS
 ## control shape naming
@@ -228,17 +250,20 @@ def show_ui():
 ## UI style
     w_id = "ccc"
     w_title = "Control Curve Creator"
-    w_width = 250
-    w_height = 225
-    w_pad = w_width//12
+    w_width = 260
+    w_height = 270
+    w_pad = w_width//16
     gap = w_pad//4
     w_content = w_width - w_pad*2
     half = w_content//2
+    third = w_content//3
 
-    def sep():
-        cmds.separator(h=gap, style="none")
-    
+    def sep(n):
+        cmds.separator(h=(gap*n), style="none")
     def par():
+        cmds.setParent("..")
+    def par2():
+        cmds.setParent("..")
         cmds.setParent("..")
 
 ## button functions
@@ -282,7 +307,29 @@ def show_ui():
             mirror_grp = cmds.group(new_os_grp, n=f"{new_os_grp}_mirror")
             cmds.xform(mirror_grp, ws=True, rp=(0,0,0), sp=(0,0,0))
             cmds.setAttr(f"{mirror_grp}.sx", -1)
-            lock_hide_freeze(True, True, False, mirror_grp, "all")
+
+    def onLHToggle(trs, *args):
+        sel = cmds.ls(sl=True, long=False)
+        if not sel:
+            return
+        
+        for item in sel:
+            check_transforms(item, trs)
+
+        sel_status = []
+        for object in sel:
+            sel_status.append({
+                "lock": cmds.getAttr(object, lock=False),
+                "hidden": cmds.getAttr(object, channelBox=False)
+                })
+
+        for (object, info) in zip(sel, sel_status):
+            lock_hide_freeze(info["lock"], info["hidden"], False, object, trs)
+        
+
+        # feed first letter as parameter to function
+
+
                     
 
 ## create window
@@ -294,15 +341,14 @@ def show_ui():
     cmds.showWindow(w_id)
 
     cmds.columnLayout(adj=True, columnOffset=["both", w_pad])
-    sep()
-    sep()
+    sep(2)
 
     cmds.rowLayout(adj=True,nc=3)
     cmds.columnLayout(adj=True, w=half-gap)
 
     for c in ctrl_registry[0]:
         cmds.button(l=c[0],c=ft.partial(onClick, c[1]))
-        sep()
+        sep(1)
 
     par()
     cmds.columnLayout(adj=True, w=gap)
@@ -311,11 +357,10 @@ def show_ui():
     cmds.columnLayout(adj=True, w=(half-gap))
     for c in ctrl_registry[1]:
         cmds.button(l=c[0],c=ft.partial(onClick, c[1]))
-        sep()
+        sep(1)
 
-    par()
-    par()
-    sep()
+    par2()
+    sep(1)
 
     side_dd = cmds.optionMenuGrp(
         l="Side", 
@@ -323,7 +368,7 @@ def show_ui():
         ann="Affects drawing overrides")
     for item in side_labels:
         cmds.menuItem(l=item)
-    sep()
+    sep(1)
 
     cmds.rowLayout(adj=True, nc=2)
     cmds.columnLayout(adj=True)
@@ -331,9 +376,8 @@ def show_ui():
     par()
     cmds.columnLayout(adj=True)
     scale_slider = cmds.floatSlider(min=5.0, max=50.0, v=15.0, w=half)
-    par()
-    par()
-    sep()
+    par2()
+    sep(2)
 
     cmds.rowLayout(adj=True, nc=3)
     cmds.columnLayout(adj=True, w=half-gap)
@@ -343,16 +387,21 @@ def show_ui():
     par()
     cmds.columnLayout(adj=True,w=half-gap)
     mirror_b = cmds.button(l="Mirror",c=onMirror)
-    par()
-    par()
-    sep()
+    par2()
+    sep(2)
 
+    cmds.text(l="Lock & Hide Toggle")
+    sep(1)
+    cmds.rowLayout(nc=3)
+    for b in attr:
+        cmds.columnLayout(adj=True, w=(third-gap//2))
+        cmds.button(l=b, c=ft.partial(onLHToggle, b))
+        par()
+    par()
+
+    sep(2)
     cmds.button(l="Close",c=onClose)
 
 show_ui()
-
-
-
-
 
 
