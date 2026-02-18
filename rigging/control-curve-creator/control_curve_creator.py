@@ -135,7 +135,6 @@ def create_offset_group(ctrl, mode, sel):
     if mode == "snap":
         constr = cmds.parentConstraint(sel, os_group, mo=False)
         cmds.delete(constr)
-        lock_hide_freeze(True, True, False, os_group, "all")
 
     return os_group
 
@@ -206,11 +205,19 @@ def fix_mirror_naming(old, new) -> str:
     news = (cmds.listRelatives(new, ad=True, f=True) or []) + [new]
     if len(olds) != len(news):
         cmds.warning("Naming issue: check naming of mirrored objects.")
-    
-    for a, b in zip(olds, news):
-        newname = a.replace("_l_", "_r_") if "_l_" in a else a.replace("_r_", "_l_") if "_r_" in a else a
-        parent = cmds.rename(b, newname.split("|")[-1])
-        
+
+    og_side = "left" if "_l_" in olds[0] else "right"
+    if og_side == "left":
+        set_drawing_or(news[1], "Right")
+        for a, b in zip(olds, news):
+            newname = a.replace("_l_", "_r_")
+            parent = cmds.rename(b, newname.split("|")[-1])
+    elif og_side == "right":
+        set_drawing_or(news[1], "Left")
+        for a, b in zip(olds, news):
+            newname = a.replace("_r_", "_l_")
+            parent = cmds.rename(b, newname.split("|")[-1])
+
     return parent
 
 
