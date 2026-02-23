@@ -12,6 +12,10 @@ side_colors = {
     "Right": 18 }
 side_labels = ["Auto", "Center", "Right", "Left"]
 
+# general runtimeError function
+def error(criminal, words="Internal error with"):
+    raise RuntimeError(f"{words} {criminal}.")
+
 # shape functions
 def create_circle(s):
     return cmds.circle(nr=(0, 1, 0), r=s, ch=False)[0]
@@ -66,11 +70,8 @@ ctrl_registry = [
 ## check what is frozen, locked, hidden to determine action
 def check_transforms(target: str, trs: str) -> dict:
     tform = trs.lower()     # ensure input is lowercase
-    print(tform)
     tform_short = tform[0]  # first letter of input, should be t, r, or s
-    print(tform_short)
     basenumber = 0 if tform_short in ("t", "r") else 1      # 0 for t/r, 1 for s
-    print(basenumber)
     transforms = []         
     for axis in ("X", "Y", "Z"):
         name = f"{target}.{tform_short}{axis.lower()}"
@@ -80,39 +81,44 @@ def check_transforms(target: str, trs: str) -> dict:
             "visible": cmds.getAttr(name, channelBox=True, keyable=True)
         }
         transforms.append(info)
+
     print(transforms)
+
     result = {key: all(d[key] for d in transforms) for key in transforms[0]}
-    print(result)
     return result
 
+
 # lock, hide, freeze master function
-def lock_hide_freeze(do_lock, do_hide, freeze, target, trs):
+def lhf(action, target, trs): 
     if not target:
         return
     if isinstance(trs, str):
         trs = ["t", "r", "s"] if trs == "all" else [trs.lower()]
-    trs = list(dict.fromkeys(
-        t[0] if len(t) > 1 else t 
-        for t in trs))
+    trs = list(dict.fromkeys(t[0] if len(t) > 1 else t for t in trs))
     allowed_trs = {"t", "r", "s"}
     trs = [t for t in trs if t in allowed_trs]
     if not trs:
-        raise RuntimeError("Invalid transformation token.")
+        error("transformation token")
+    action = [action] if isinstance(action, str) else action
+
+
+
     for tform in trs:
-        if freeze:
+        if "freeze" in action:
             cmds.makeIdentity(target, a=True, **{tform: True})
-        for letter in ("x", "y", "z"):
-            if do_lock:
-                cmds.setAttr(
-                    f"{target}.{tform}{letter}",
-                    lock=True
-                    )
-            if do_hide:
-                cmds.setAttr(
-                    f"{target}.{tform}{letter}",
-                    channelBox=False,
-                    keyable=False
-                    )
+        else:
+            for letter in ("x", "y", "z"):
+                if "lock" or "unlock" in action:
+                    cmds.setAttr(
+                        f"{target}.{tform}{letter}",
+                        lock=(action == "lock")
+                        )
+                if "hide" or "unhide" in action:
+                    cmds.setAttr(
+                        f"{target}.{tform}{letter}",
+                        channelBox=(action != "hide"),
+                        keyable=(action != "hide")
+                        )
                 
 # CTRL CURVE CREATION FUNCTIONS
 ## mode definer
@@ -143,7 +149,7 @@ def ctrl_name(mode, ctrl, joint_name) -> str:
         else:
             new_name = increment_name(basename)     
     else:
-        raise RuntimeError(f"Invalid mode: {mode}")
+        error(mode, "Invalid mode:")
     cmds.rename(ctrl, new_name)
     return new_name
 
@@ -172,7 +178,7 @@ def resolve_color(ctrl, side_token):
 def set_drawing_or(ctrl, side_token):
     shapes = cmds.listRelatives(ctrl, shapes=True, fullPath=True) or []
     if not shapes:
-        raise RuntimeError(f"No shape found under control: {ctrl}")
+        error(ctrl, "No shape found under control:")
     shape = shapes[0]
 
     color_id = resolve_color(ctrl, side_token)
@@ -200,27 +206,25 @@ def mirror_validate(sel: list) -> list:
         else:
             parents = cmds.listRelatives(name, p=True, f=True)
             if not parents:
-                raise RuntimeError("Select a control curve or its control group.")
+                error("selection: select a control curve or its control group.")
             candidates = []
             for candidate in parents:
                 if "offset" in candidate:
                     candidates.append(candidate)
             if len(candidates) > 1:
-                raise RuntimeError(f"Error: {name} has multiple offset groups.")
+                error(name, "Multiple offset groups:")
             if not candidates:
-                raise RuntimeError("Selected curve has no offset group!")
+                error("", "Selected curve has no offset group!")
             else:
                 targets.append(candidate)     
     return targets
 
 ## mirror name fix
 def fix_mirror_naming(old, new) -> str:
-
     olds = (cmds.listRelatives(old, ad=True, f=True) or []) + [old]
     news = (cmds.listRelatives(new, ad=True, f=True) or []) + [new]
     if len(olds) != len(news):
         cmds.warning("Naming issue: check naming of mirrored objects.")
-
     og_side = "left" if "_l_" in olds[0] else "right"
     if og_side == "left":
         set_drawing_or(news[1], "Right")
@@ -232,7 +236,6 @@ def fix_mirror_naming(old, new) -> str:
         for a, b in zip(olds, news):
             newname = a.replace("_r_", "_l_")
             parent = cmds.rename(b, newname.split("|")[-1])
-
     return parent
 
 # WINDOW
@@ -287,7 +290,7 @@ def show_ui():
             for letter in ("tx", "ty", "tz", "rx", "ry", "rz", "sx", "sy", "sz"):
                 if cmds.getAttr(f"{member}.{letter}", lock=False):
                     to_freeze.append(letter)
-            lock_hide_freeze(False, False, True, member, to_freeze)
+            lhf("freeze", member, to_freeze)
         
     def onMirror(*args):
         sel = cmds.ls(sl=True, long=False)
@@ -307,9 +310,9 @@ def show_ui():
             attrs = check_transforms(item, trs)
             if attrs["frozen"] == False:
                 cmds.select(item, replace=True)
-                raise RuntimeError(f"Selection {item} has unfrozen {trs} value(s).")
-            else:
-                lock_hide_freeze(attrs["unlocked"], attrs["visible"], False, item, trs)
+                error(f"selection {item}: unfrozen {trs} value(s).")
+            todo = ["lock", "hide"] if attrs["unlocked"] else ["unlock", "unhide"]
+            lhf(todo, item, trs)
 
 ## create window
     if cmds.window(w_id,exists=True):
