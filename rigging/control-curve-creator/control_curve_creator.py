@@ -6,14 +6,11 @@ shape = ""
 mode = ""
 joint_name = ""
 attr = ["Translate", "Rotate", "Scale"]
-
 side_colors = {
     "Center": 13,
     "Left": 17,
-    "Right": 18
-}
-
-side_labels = ["Auto","Center","Right","Left"]
+    "Right": 18 }
+side_labels = ["Auto", "Center", "Right", "Left"]
 
 # shape functions
 def create_circle(s):
@@ -54,27 +51,44 @@ def create_cross(s):
             ( 3*s, 0, -1*s),( 1*s, 0, -1*s),
             ( 1*s, 0, -3*s)])
 
-
 # control curve registry: labels and functions
 ctrl_registry = [
+# left side buttons
 [("Circle", create_circle), 
 ("Square", create_square), 
 ("Triangle", create_triangle)],
+# right side buttons
 [("Box", create_box), 
 ("Arrow", create_arrow), 
 ("Cross", create_cross)]]
 
-# mode definer
-def validate_mode():
-    sel = cmds.ls(sl=True,type="joint",sn=True)
-    mode = "default" if not sel else "snap"
-    return mode, sel
+# FREEZE, LOCK, HIDE ATTRIBUTES
+## check what is frozen, locked, hidden to determine action
+def check_transforms(target: str, trs: str) -> dict:
+    tform = trs.lower()     # ensure input is lowercase
+    print(tform)
+    tform_short = tform[0]  # first letter of input, should be t, r, or s
+    print(tform_short)
+    basenumber = 0 if tform_short in ("t", "r") else 1      # 0 for t/r, 1 for s
+    print(basenumber)
+    transforms = []         
+    for axis in ("X", "Y", "Z"):
+        name = f"{target}.{tform_short}{axis.lower()}"
+        info = {
+            "frozen": True if abs((cmds.getAttr(name)) - basenumber) < 1e-6 else False,
+            "unlocked": False if cmds.getAttr(name, lock=True) else True,
+            "visible": cmds.getAttr(name, channelBox=True, keyable=True)
+        }
+        transforms.append(info)
+    print(transforms)
+    result = {key: all(d[key] for d in transforms) for key in transforms[0]}
+    print(result)
+    return result
 
-# freeze, lock, hide master function
+# lock, hide, freeze master function
 def lock_hide_freeze(do_lock, do_hide, freeze, target, trs):
     if not target:
         return
-    
     if isinstance(trs, str):
         trs = ["t", "r", "s"] if trs == "all" else [trs.lower()]
     trs = list(dict.fromkeys(
@@ -84,7 +98,6 @@ def lock_hide_freeze(do_lock, do_hide, freeze, target, trs):
     trs = [t for t in trs if t in allowed_trs]
     if not trs:
         raise RuntimeError("Invalid transformation token.")
-                
     for tform in trs:
         if freeze:
             cmds.makeIdentity(target, a=True, **{tform: True})
@@ -101,33 +114,17 @@ def lock_hide_freeze(do_lock, do_hide, freeze, target, trs):
                     keyable=False
                     )
                 
-def check_transforms(target: str, trs: str):
-    tform = trs.lower()
-    tform_short = tform[0]
-    basenumber = 0 if tform_short in ("t", "r") else 1
-
-    # check unfrozen values, locked, hidden+keyable
-
-    transforms = []
-    for axis in ("X", "Y", "Z"):
-        info = {
-            "freeze": True if cmds.getAttr(f"{target}.{tform}{axis}") == basenumber else False
-                                   
-        }
-
-        if cmds.getAttr(f"{target}.{tform}{axis}") != basenumber:
-            cmds.select(target, replace=True)
-            return
-                
-    return 
-
-
-        
 # CTRL CURVE CREATION FUNCTIONS
+## mode definer
+def validate_mode():
+    sel = cmds.ls(sl=True,type="joint",sn=True)
+    mode = "default" if not sel else "snap"
+    return mode, sel
+
 ## control shape naming
+### index incrementing for unique names
 def increment_name(base_name: str, start: int = 1, pad: int = 2) -> str:
     i = start
-    
     while True:
         candidate = f"{base_name}_{i:0{pad}d}"
         if not cmds.objExists(candidate):
@@ -135,7 +132,8 @@ def increment_name(base_name: str, start: int = 1, pad: int = 2) -> str:
         i += 1
     return candidate
 
-def ctrl_name(mode, ctrl, joint_name):
+### create and apply unique name
+def ctrl_name(mode, ctrl, joint_name) -> str:
     if mode == "default":
         new_name = increment_name("anim_control")
     elif mode == "snap":
@@ -146,27 +144,22 @@ def ctrl_name(mode, ctrl, joint_name):
             new_name = increment_name(basename)     
     else:
         raise RuntimeError(f"Invalid mode: {mode}")
-    
     cmds.rename(ctrl, new_name)
     return new_name
 
-## offset group
-def create_offset_group(ctrl, mode, sel):
+### offset group
+def create_offset_group(ctrl, mode, sel) -> str:
     os_group = cmds.group(ctrl, n=f"{ctrl}_offset")
-
     if mode == "snap":
         constr = cmds.parentConstraint(sel, os_group, mo=False)
         cmds.delete(constr)
-
     return os_group
 
-## drawing overrides
+### drawing overrides
 def resolve_color(ctrl, side_token):
     if side_token != "Auto":
         return side_colors[side_token]
-    
     tx = cmds.xform(ctrl, q=True, t=True, ws=True)[0]
-
     EPS = 1e-4
     if abs(tx) <= EPS:
         resolved = "Center"
@@ -188,7 +181,7 @@ def set_drawing_or(ctrl, side_token):
     cmds.setAttr(f"{shape}.overrideRGBColors", 0)
     cmds.setAttr(f"{shape}.overrideColor", color_id)
 
-## control set-up: holds all control creation related functions
+### control set-up: holds all control creation related functions
 def ctrl_setup(create_fn, scale_token, mode, joint, side_token):
     ctrl = create_fn(scale_token)
     short_name = joint.split(":")[-1] if mode == "snap" else []
@@ -241,8 +234,6 @@ def fix_mirror_naming(old, new) -> str:
             parent = cmds.rename(b, newname.split("|")[-1])
 
     return parent
-
-
 
 # WINDOW
 def show_ui():
@@ -312,28 +303,15 @@ def show_ui():
         sel = cmds.ls(sl=True, long=False)
         if not sel:
             return
-        
         for item in sel:
-            check_transforms(item, trs)
-
-        sel_status = []
-        for object in sel:
-            sel_status.append({
-                "lock": cmds.getAttr(object, lock=False),
-                "hidden": cmds.getAttr(object, channelBox=False)
-                })
-
-        for (object, info) in zip(sel, sel_status):
-            lock_hide_freeze(info["lock"], info["hidden"], False, object, trs)
-        
-
-        # feed first letter as parameter to function
-
-
-                    
+            attrs = check_transforms(item, trs)
+            if attrs["frozen"] == False:
+                cmds.select(item, replace=True)
+                raise RuntimeError(f"Selection {item} has unfrozen {trs} value(s).")
+            else:
+                lock_hide_freeze(attrs["unlocked"], attrs["visible"], False, item, trs)
 
 ## create window
-
     if cmds.window(w_id,exists=True):
         cmds.deleteUI(w_id)
 
@@ -343,6 +321,7 @@ def show_ui():
     cmds.columnLayout(adj=True, columnOffset=["both", w_pad])
     sep(2)
 
+### shape creation buttons
     cmds.rowLayout(adj=True,nc=3)
     cmds.columnLayout(adj=True, w=half-gap)
 
@@ -362,6 +341,7 @@ def show_ui():
     par2()
     sep(1)
 
+### side dropdown menu: drawing override colors
     side_dd = cmds.optionMenuGrp(
         l="Side", 
         cw=(1,half//4),
@@ -370,6 +350,7 @@ def show_ui():
         cmds.menuItem(l=item)
     sep(1)
 
+### curve scale slider
     cmds.rowLayout(adj=True, nc=2)
     cmds.columnLayout(adj=True)
     cmds.text(l="Control Size")
@@ -379,6 +360,7 @@ def show_ui():
     par2()
     sep(2)
 
+### freeze and mirror buttons
     cmds.rowLayout(adj=True, nc=3)
     cmds.columnLayout(adj=True, w=half-gap)
     freeze_b = cmds.button(l="Freeze",c=onFreeze)
@@ -390,6 +372,7 @@ def show_ui():
     par2()
     sep(2)
 
+### lock and hide toggle buttons
     cmds.text(l="Lock & Hide Toggle")
     sep(1)
     cmds.rowLayout(nc=3)
@@ -399,6 +382,7 @@ def show_ui():
         par()
     par()
 
+### close button
     sep(2)
     cmds.button(l="Close",c=onClose)
 
