@@ -75,21 +75,19 @@ def check_transforms(target: str, trs: str) -> dict:
     transforms = []         
     for axis in ("X", "Y", "Z"):
         name = f"{target}.{tform_short}{axis.lower()}"
-        info = {
+        info = { # this is pretty scuffed but it works as intended even if ugly
             "frozen": True if abs((cmds.getAttr(name)) - basenumber) < 1e-6 else False,
             "unlocked": False if cmds.getAttr(name, lock=True) else True,
-            "visible": cmds.getAttr(name, channelBox=True, keyable=True)
-        }
+            "visible": False if cmds.getAttr(name, channelBox=True) else True,
+            "keyable": True if cmds.getAttr(name, keyable=True) else False
+        } 
         transforms.append(info)
-
-    print(transforms)
-
     result = {key: all(d[key] for d in transforms) for key in transforms[0]}
     return result
 
 
 # lock, hide, freeze master function
-def lhf(action, target, trs): 
+def lhf(do_freeze, do_lh, target, trs): # true, false, or none
     if not target:
         return
     if isinstance(trs, str):
@@ -99,26 +97,14 @@ def lhf(action, target, trs):
     trs = [t for t in trs if t in allowed_trs]
     if not trs:
         error("transformation token")
-    action = [action] if isinstance(action, str) else action
-
-
 
     for tform in trs:
-        if "freeze" in action:
+        if do_freeze:
             cmds.makeIdentity(target, a=True, **{tform: True})
-        else:
-            for letter in ("x", "y", "z"):
-                if "lock" or "unlock" in action:
-                    cmds.setAttr(
-                        f"{target}.{tform}{letter}",
-                        lock=(action == "lock")
-                        )
-                if "hide" or "unhide" in action:
-                    cmds.setAttr(
-                        f"{target}.{tform}{letter}",
-                        channelBox=(action != "hide"),
-                        keyable=(action != "hide")
-                        )
+        for letter in ("x", "y", "z"):
+            if do_lh is not None:
+                cmds.setAttr(f"{target}.{tform}{letter}", keyable=not do_lh, channelBox=False)
+                cmds.setAttr(f"{target}.{tform}{letter}", lock=do_lh)
                 
 # CTRL CURVE CREATION FUNCTIONS
 ## mode definer
@@ -194,6 +180,7 @@ def ctrl_setup(create_fn, scale_token, mode, joint, side_token):
     name = ctrl_name(mode, ctrl, short_name)
     create_offset_group(name, mode, joint)
     set_drawing_or(name, side_token)
+    cmds.setAttr(f"{name}.v", lock=True, keyable=False, channelBox=False)
     return name
 
 # MIRROR FUNCTIONS
@@ -290,7 +277,7 @@ def show_ui():
             for letter in ("tx", "ty", "tz", "rx", "ry", "rz", "sx", "sy", "sz"):
                 if cmds.getAttr(f"{member}.{letter}", lock=False):
                     to_freeze.append(letter)
-            lhf("freeze", member, to_freeze)
+            lhf(True, None, member, to_freeze)
         
     def onMirror(*args):
         sel = cmds.ls(sl=True, long=False)
@@ -308,11 +295,11 @@ def show_ui():
             return
         for item in sel:
             attrs = check_transforms(item, trs)
-            if attrs["frozen"] == False:
+            if not attrs["frozen"]:
                 cmds.select(item, replace=True)
                 error(f"selection {item}: unfrozen {trs} value(s).")
-            todo = ["lock", "hide"] if attrs["unlocked"] else ["unlock", "unhide"]
-            lhf(todo, item, trs)
+            todo = all(attrs[k] for k in ("unlocked", "visible", "keyable"))
+            lhf(False, todo, item, trs)
 
 ## create window
     if cmds.window(w_id,exists=True):
