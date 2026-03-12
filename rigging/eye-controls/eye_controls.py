@@ -5,31 +5,23 @@ import maya.cmds as cmds
 def create_eye_ctrl():
     ecl = cmds.circle(c=(4, 0, 0), r=2.5, ch=False, n="anim_l_eye01")[0]
     ecr = cmds.circle(c=(-4, 0, 0), r=2.5, ch=False, n="anim_r_eye01")[0]
-    ecp = cmds.circle(r=9, ch=False, n="anim_eyes01")[0]
-    cv1 = [f"{ecp}.cv[1]", f"{ecp}.cv[5]"]
-    cv2 = [f"{ecp}.cv[0]", f"{ecp}.cv[2]",
-        f"{ecp}.cv[4]", f"{ecp}.cv[6]"]
-    cmds.scale(1, 0.3, 1, cv1)
-    cmds.scale(1, 0.8, 1, cv2)
+    ecp = cmds.spaceLocator(n="anim_eyes01")[0]
+    cmds.setAttr(f"{ecp}.localScaleY", 2.5)
     cmds.parent([ecl, ecr], ecp)
-    cmds.xform([ecl, ecr], centerPivots=True)
     for curve in (ecl, ecr, ecp):
-        if "l" in curve:
-            c_id = 17
-        elif "r" in curve:
-            c_id = 18
-        else:
-            c_id = 13
+        cmds.xform(curve, centerPivots=True)
         cmds.setAttr(f"{curve}.overrideEnabled", 1)
         cmds.setAttr(f"{curve}.overrideRGBColors", 0)
-        cmds.setAttr(f"{curve}.overrideColor", c_id)
         for v in ("sx", "sy", "sz", "v"):
             cmds.setAttr(f"{curve}.{v}", lock=True, keyable=False, channelBox=False)
+    cmds.setAttr(f"{ecl}.overrideColor", 17)
+    cmds.setAttr(f"{ecr}.overrideColor", 18)
+    cmds.setAttr(f"{ecp}.overrideColor", 13)
     cmds.select(ecp, r=True)
-    for bs in ("l", "r"):
-        b_sn = f"b{bs}"
-        cmds.addAttr(ln=f"blink_{bs}", sn=b_sn, at="float", dv=0, min=10, max=(-10)) # adjust these later!!
-        cmds.setAttr(f"{ecp}.{b_sn}", l=False, k=True, cb=False)
+    for side in ("l", "r"):
+        token = f"b{side}"
+        cmds.addAttr(ln=f"blink_{side}", sn=token, at="float", dv=0, min=10, max=(-10)) # adjust these later!!
+        cmds.setAttr(f"{ecp}.{token}", l=False, k=True, cb=False)
     cmds.addAttr(ln="follow", sn="f", at="float", dv=1, min=0, max=1)
     cmds.setAttr(f"{ecp}.f", l=False, k=True, cb=False)
     return ecl, ecr, ecp
