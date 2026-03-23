@@ -13,3 +13,5 @@ def run():
         count += 1
 
     print(f"{count} joints zeroed out.")
+
+run()

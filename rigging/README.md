@@ -16,7 +16,8 @@ Using the tools:
 - Option 2:
     - Download the Python file
     - Place it inside the following folder: `C:\Users\<your-username>\Documents\maya\scripts`
-    - Add a custom button in the Shelf Editor with the following contents:
+    - Add a custom button in the Shelf Editor
+    - Paste the following code into the button's Command tab with Python chosen as the language:
 
 ```python
 import <toolname>
