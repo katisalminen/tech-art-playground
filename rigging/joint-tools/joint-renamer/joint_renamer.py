@@ -203,7 +203,7 @@ def apply_rename_one(entry: dict) -> bool:
 
 # WINDOW
 
-def show_ui():
+def run():
 
     window_id = "joint_renamer_v4"
     window_title = "Joint Renamer V4"
@@ -443,5 +443,5 @@ def show_ui():
     
 
 
-show_ui()
+run()
 

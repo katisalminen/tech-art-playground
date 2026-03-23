@@ -47,7 +47,7 @@ def toggle(mode: str, vis: int):
     print(f"{len(joint_list)} joint LRA set to {vis}.")
 
 
-def show_ui():
+def run():
 
     def read_state(*args):
         value = cmds.intSlider(on_or_off, query=True, value=True)
@@ -114,4 +114,4 @@ def show_ui():
 
     cmds.showWindow(window_id)
 
-show_ui()
+run()

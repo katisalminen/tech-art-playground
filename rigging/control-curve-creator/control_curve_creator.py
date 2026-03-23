@@ -226,7 +226,7 @@ def fix_mirror_naming(old, new) -> str:
     return parent
 
 # WINDOW
-def show_ui():
+def run():
 
 ## UI style
     w_id = "ccc"
@@ -376,6 +376,6 @@ def show_ui():
     sep(2)
     cmds.button(l="Close",c=onClose)
 
-show_ui()
+run()
 
 
