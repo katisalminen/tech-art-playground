@@ -34,3 +34,4 @@ def run():
 
     cmds.warning(warn if found else "All clear!")
 
+run()
