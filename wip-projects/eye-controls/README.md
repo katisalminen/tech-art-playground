@@ -1,5 +1,7 @@
 # EYE CONTROL CREATION
 
+Eye control creation assistant for Autodesk Maya, WIP.
+
 Needed features:
 
 - Create eye controls: individual + parent

@@ -1,34 +1,51 @@
 import maya.cmds as cmds
 
 
-# create eye control curves: two eye circles + parent goggles
-def create_eye_ctrl():
-    ecl = cmds.circle(c=(4, 0, 0), r=2.5, ch=False, n="anim_l_eye01")[0]
-    ecr = cmds.circle(c=(-4, 0, 0), r=2.5, ch=False, n="anim_r_eye01")[0]
-    ecp = cmds.spaceLocator(n="anim_eyes01")[0]
-    cmds.setAttr(f"{ecp}.localScaleY", 2.5)
-    cmds.parent([ecl, ecr], ecp)
-    for curve in (ecl, ecr, ecp):
-        cmds.xform(curve, centerPivots=True)
-        cmds.setAttr(f"{curve}.overrideEnabled", 1)
-        cmds.setAttr(f"{curve}.overrideRGBColors", 0)
+'''
+Create two control circles for each eye + locator parent that also controls blink and head follow attribute
+'''
+
+''
+ctrl_registry = []
+letters = ['l', 'r', 'p']
+coords = [4, -4, 0]
+colors = [17, 18, 13]
+
+for l, c, rgb in zip(letters, coords, colors):
+    entry = {"id": f"ec{l}", "x": c, "name": f"anim_{l}_eye01", "color": rgb}
+    ctrl_registry.append(entry)
+
+def create_ctrls(registry: list):
+
+    shapes = []
+    for item in registry:
+        if "p" not in item['id']:
+            s = cmds.circle(c=(item['x'], 0, 0), r=2.5, ch=False, n=item['name'])[0]
+        else:
+            s = cmds.spaceLocator(n=item['name'])[0]
+            cmds.setAttr(f"{s}, localScaleY", 2.5)
+            for side in ("l", "r"):
+                token = f"b{side}"
+                cmds.addAttr(ln=f"blink_{side}", sn=token, at="float", dv=0, min=10, max=(-10)) # adjust later
+                cmds.setAttr(f"{item["name"]}.{token}", l=False, k=True, cb=False)
+            cmds.addAttr(ln="follow", sn="f", at="float", dv=1, min=0, max=1)
+            cmds.setAttr(f"{shapes[2]}.f", l=False, k=True, cb=False)
+        shapes.append(s)
+
+    for item in shapes:
+        cmds.xform(item, centerPivots=True)
+        cmds.setAttr(f"{item}.overrideEnabled", 1)
+        cmds.setAttr(f"{item}.overrideRGBColors", 0)
+        cmds.setAttr(f"{item}.overrideColor", item["color"])
         for v in ("sx", "sy", "sz", "v"):
-            cmds.setAttr(f"{curve}.{v}", lock=True, keyable=False, channelBox=False)
-    cmds.setAttr(f"{ecl}.overrideColor", 17)
-    cmds.setAttr(f"{ecr}.overrideColor", 18)
-    cmds.setAttr(f"{ecp}.overrideColor", 13)
-    cmds.select(ecp, r=True)
-    for side in ("l", "r"):
-        token = f"b{side}"
-        cmds.addAttr(ln=f"blink_{side}", sn=token, at="float", dv=0, min=10, max=(-10)) # adjust these later!!
-        cmds.setAttr(f"{ecp}.{token}", l=False, k=True, cb=False)
-    cmds.addAttr(ln="follow", sn="f", at="float", dv=1, min=0, max=1)
-    cmds.setAttr(f"{ecp}.f", l=False, k=True, cb=False)
-    return ecl, ecr, ecp
+            cmds.setAttr(f"{item}.{v}", lock=True, keyable=False, channelBox=False)
 
+    cmds.parent([shapes[0], shapes[1]], shapes[2])
+    cmds.select(shapes[2]["name"], r=True)
 
-def ctrl_creation():
-    eye_ctrl_l, eye_ctrl_r, eye_ctrl = create_eye_ctrl()
+    return shapes
+    
+
 
 
 
