@@ -1,6 +1,3 @@
-import maya.cmds as cmds
-
-
 '''
 EYE CONTROL CREATION HELPER TOOL
 
@@ -12,51 +9,67 @@ EYE CONTROL CREATION HELPER TOOL
 - Fleshy eyes: eye rotation slightly rotates eyelid bones
 '''
 
+import maya.cmds as cmds
 
-ctrl_registry = []
-letters = ['l', 'r', 'p']
-coords = [4, -4, 0]
-colors = [17, 18, 13]
+# ctrl shape info -- for easier editing later
 
-for l, c, rgb in zip(letters, coords, colors):
-    entry = {"id": f"ec{l}", "x": c, "name": f"anim_{l}_eye01", "color": rgb}
-    ctrl_registry.append(entry)
+ctrl_info = [
+    {"id": "ecl", "side": "l", "x": 4, "color": 17}, # left eye control
+    {"id": "ecr", "side": "r", "x": -4, "color": 18}, # right eye control
+    {"id": "ecp", "name": "anim_eyes01", "color": 13}, # eye parent control
+]
 
-def create_ctrls(registry: list):
+blink_info = {"min": -10, "max": 10, "name": "Blink", "shortname": "b"} # blink attribute
+follow_info = {"min": 0, "max": 1, "name": "Follow", "shortname": "f"} # head follow attribute
 
-    shapes = []
-    for item in registry:
-        if "p" not in item['id']:
-            s = cmds.circle(c=(item['x'], 0, 0), r=2.5, ch=False, n=item['name'])[0]
+# validate selection
+def validate():
+    sel = cmds.ls(sl=True, type="joint", sn=True)
+    if not sel or len(sel) != 2:
+        raise RuntimeError("Please select two eye joints.")
+# check for other edge cases resulting in errors and safeguard against them!!
+
+
+# create eye control curves: two eye circles + parent locator
+def create_shapes():
+    controls = {}
+    for entry in ctrl_info:
+        if "x" in entry:
+            c = cmds.circle(c=(entry["x"], 0, 0), r=2.5, ch=False, n=f"anim_{entry["side"]}_01")[0]
         else:
-            s = cmds.spaceLocator(n=item['name'])[0]
-            cmds.setAttr(f"{s}, localScaleY", 2.5)
-            for side in ("l", "r"):
-                token = f"b{side}"
-                cmds.addAttr(ln=f"blink_{side}", sn=token, at="float", dv=0, min=10, max=(-10)) # adjust later
-                cmds.setAttr(f"{item["name"]}.{token}", l=False, k=True, cb=False)
-            cmds.addAttr(ln="follow", sn="f", at="float", dv=1, min=0, max=1)
-            cmds.setAttr(f"{shapes[2]}.f", l=False, k=True, cb=False)
-        shapes.append(s)
+            c = cmds.spaceLocator(n=entry["name"])[0]
+            cmds.setAttr(f"{c}.localScaleY", 2.5)
+            for n in ("l", "r"):
+                cmds.addAttr(
+                    ln=f"{blink_info["name"]} {n}", 
+                    sn=f"{blink_info["shortname"]}_{n}", 
+                    at="float", 
+                    dv=0, 
+                    min=blink_info["min"], 
+                    max=blink_info["max"])
+            cmds.addAttr(
+                ln=f"{follow_info["name"]}", 
+                sn=f"{follow_info["shortname"]}", 
+                at="float", 
+                dv=1, 
+                min=follow_info["min"], 
+                max=follow_info["max"])
+        cmds.xform(c, centerPivots=True)
+        cmds.setAttr(f"{c}.overrideEnabled", 1)
+        cmds.setAttr(f"{c}.overrideRGBColors", 0)
+        cmds.setAttr(f"{c}.overrideColor", entry["color"])
+        for value in ("sx", "sy", "sz", "v"):
+            cmds.setAttr(f"{c}.{value}", lock=True, keyable=False, channelBox=False)
+        controls[entry["id"]] = c
+    return controls
 
-    for item in shapes:
-        cmds.xform(item, centerPivots=True)
-        cmds.setAttr(f"{item}.overrideEnabled", 1)
-        cmds.setAttr(f"{item}.overrideRGBColors", 0)
-        cmds.setAttr(f"{item}.overrideColor", item["color"])
-        for v in ("sx", "sy", "sz", "v"):
-            cmds.setAttr(f"{item}.{v}", lock=True, keyable=False, channelBox=False)
-
-    cmds.parent([shapes[0], shapes[1]], shapes[2])
-    cmds.select(shapes[2]["name"], r=True)
-
-    return shapes
-    
+# position controls in relation to eyes and connect them
+def position_controls(controls: dict):
+    cmds.parent([controls["ecl"], controls["ecr"]], controls["ecp"])
 
 
 
 
-ctrl_creation()
 
 
 def show_ui():
@@ -79,6 +92,17 @@ def show_ui():
         cmds.setParent("..")
         cmds.setParent("..")
 
+    def onCreate(*args):
+        validate()
+        controls = create_shapes()
+        position_controls(controls)
+        eye_rotation()
+        implement_follow()
+        create_blink()
+        fleshy_eyes()
+        
+
+
 
     if cmds.window(w_id,exists=True):
         cmds.deleteUI(w_id)
@@ -87,5 +111,14 @@ def show_ui():
     cmds.showWindow(w_id)
 
     cmds.columnLayout(adj=True, columnOffset=["both", w_pad])
+    sep(2)
+    cmds.checkBox(l="Fleshy Eyes", v=True, ann="Enable or disable Fleshy Eyes.")
+
+    sep(2)
+
+    cmds.button(
+        l="Create Controls", c=onCreate,
+        ann="Select two eye joints to start.")
+
 
 show_ui()
