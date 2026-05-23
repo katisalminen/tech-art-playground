@@ -2,10 +2,17 @@ import maya.cmds as cmds
 
 
 '''
-Create two control circles for each eye + locator parent that also controls blink and head follow attribute
+EYE CONTROL CREATION HELPER TOOL
+
+- Create two control circles for each eye + locator parent that also controls blink and head follow attribute
+- Position the control curves in relation to the character's eyes
+- Make each eye circle follow their control's movement - point constraint? Need to research
+- Implement follow attribute: blend whether the head's movement moves the eye controls
+- Blink attribute: rotation of eyelid bones for blinking animation
+- Fleshy eyes: eye rotation slightly rotates eyelid bones
 '''
 
-''
+
 ctrl_registry = []
 letters = ['l', 'r', 'p']
 coords = [4, -4, 0]
