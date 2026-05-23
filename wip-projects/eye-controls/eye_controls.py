@@ -3,7 +3,7 @@ EYE CONTROL CREATION HELPER TOOL
 
 - Create two control circles for each eye + locator parent that also controls blink and head follow attribute
 - Position the control curves in relation to the character's eyes
-- Make each eye circle follow their control's movement - point constraint? Need to research
+- Make each eye circle follow their control's movement
 - Implement follow attribute: blend whether the head's movement moves the eye controls
 - Blink attribute: rotation of eyelid bones for blinking animation
 - Fleshy eyes: eye rotation slightly rotates eyelid bones
@@ -25,6 +25,10 @@ attr_info = [
     {"name": "follow", "shortname": "f", "min": 0, "max": 1, "dv": 1}
 ]
 
+# how far from eyes the control is created in the Z axis
+# make configurable through UI with 40 as default value later!
+move_distance = 40
+
 # X world position checker
 def check_x_pos(sel) -> list:
     return [cmds.xform(joint, q=True, t=True, ws=True)[0] for joint in sel]
@@ -45,7 +49,7 @@ def validate() -> list:
 
     return sel
 
-# create eye control curves: two eye circles + parent locator
+# create eye control curves: left eye curve, right eye curve, parent locator
 def create_shapes() -> list:
     controls = []
     for entry in ctrl_info:
@@ -61,16 +65,16 @@ def create_shapes() -> list:
             cmds.setAttr(f"{c}.localScaleY", 2.5)
             for n in ["px", "py", "pz", "sx", "sy", "sz"]:
                 cmds.setAttr(
-                    f"{entry['name']}Shape.l{n}",
+                    f"{c}Shape.l{n}",
                     keyable=False,channelBox=False,lock=True)
             
-            for id in attr_info:
-                longname=f"{id['name']}"
+            for attr in attr_info:
+                longname=f"{attr['name']}"
                 cmds.addAttr(
-                    ln=longname,sn=f"{id['shortname']}",
-                    at="float",dv=id['dv'],
-                    min=id["min"],max=id["max"])
-                cmds.setAttr(f"{c}.{longname}", channelBox=True)
+                    ln=longname,sn=f"{attr['shortname']}",
+                    at="float",dv=attr['dv'],
+                    min=attr["min"],max=attr["max"])
+                cmds.setAttr(f"{c}.{longname}",channelBox=True)
         
         cmds.xform(c, centerPivots=True)
         cmds.setAttr(f"{c}.overrideEnabled", 1)
@@ -103,12 +107,12 @@ def position_controls(ecl, ecr, ecp, ej: list):
     locator_constraint = cmds.parentConstraint(ecl, ecr, ecp, mo=False)
     cmds.delete(locator_constraint)
     cmds.parent([ecl, ecr], ecp)
-    cmds.setAttr(f"{ecp}.translateZ", 40)
+    cmds.setAttr(f"{ecp}.translateZ", move_distance)
     cmds.makeIdentity(ecp, a=True, t=True)
 
-
-
-
+    # aim constrain
+    cmds.aimConstraint(ecl, left_joint, mo=True)
+    cmds.aimConstraint(ecr, right_joint, mo=True)
 
 def show_ui():
     
