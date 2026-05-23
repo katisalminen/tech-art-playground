@@ -1,9 +1,9 @@
 '''
 EYE CONTROL CREATION HELPER TOOL
 
-- Create two control circles for each eye + locator parent that also controls blink and head follow attribute
-- Position the control curves in relation to the character's eyes
-- Make each eye circle follow their control's movement
+x Create two control circles for each eye + locator parent that also controls blink and head follow attribute
+x Position the control curves in relation to the character's eyes
+x Make each eye circle follow their control's movement
 - Implement follow attribute: blend whether the head's movement moves the eye controls
 - Blink attribute: rotation of eyelid bones for blinking animation
 - Fleshy eyes: eye rotation slightly rotates eyelid bones
@@ -29,9 +29,15 @@ attr_info = [
 # make configurable through UI with 40 as default value later!
 move_distance = 40
 
+# lock and hide master helper function
+def lock_hide(target: str, attributes: list):
+    for value in attributes:
+        cmds.setAttr(f"{target}.{value}", lock=True,keyable=False,channelBox=False)
+        
 # X world position checker
 def check_x_pos(sel) -> list:
     return [cmds.xform(joint, q=True, t=True, ws=True)[0] for joint in sel]
+
 
 # validate selection and return names of eye joints
 def validate() -> list:
@@ -60,6 +66,7 @@ def create_shapes() -> list:
                 ch=False, 
                 n=f"anim_{entry['side']}_01"
                 )[0]
+                
         else:
             c = cmds.spaceLocator(n=entry["name"])[0]
             cmds.setAttr(f"{c}.localScaleY", 2.5)
@@ -80,10 +87,7 @@ def create_shapes() -> list:
         cmds.setAttr(f"{c}.overrideEnabled", 1)
         cmds.setAttr(f"{c}.overrideRGBColors", 0)
         cmds.setAttr(f"{c}.overrideColor", entry["color"])
-        for value in ("sx", "sy", "sz", "v"):
-            cmds.setAttr(
-                f"{c}.{value}",
-                lock=True,keyable=False,channelBox=False)
+        lock_hide(c, ("sx", "sy", "sz", "v"))
             
         controls.append(c) # list: ecl, ecr, ecp
     return controls
@@ -114,6 +118,19 @@ def position_controls(ecl, ecr, ecp, ej: list):
     cmds.aimConstraint(ecl, left_joint, mo=True)
     cmds.aimConstraint(ecr, right_joint, mo=True)
 
+    # lock and hide eye control rotation attributes
+    for ctrl in [ecl, ecr]:
+        lock_hide(ctrl, ["rx", "ry", "rz"])
+
+# implement follow attribute for blending between eye controls following head and staying in place
+def implement_follow():
+    pass
+
+    # create follow parent group and name it, center pivot, mo=True
+    # parent constrain follow group to head ctrl
+    # set key translate and rotate on follow group ? in Maya, shift R + W, creates blend parent channel in follow grp
+    # connection editor: connect follow attribute in parent ctrl to follow grp blend parent
+
 def show_ui():
     
     w_id = "ect"
@@ -137,9 +154,8 @@ def show_ui():
     def onCreate(*args):
         eye_joints = validate() # check selection
         ecl, ecr, ecp = create_shapes() # left, right, and parent controls as strings
-        position_controls(ecl, ecr, ecp, eye_joints) # position and parent controls
-        # eye_rotation()
-        # implement_follow()
+        position_controls(ecl, ecr, ecp, eye_joints) # position and parent controls, aim constraints
+        implement_follow()
         # create_blink()
         # fleshy_eyes()
         
