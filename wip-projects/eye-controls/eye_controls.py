@@ -12,61 +12,99 @@ EYE CONTROL CREATION HELPER TOOL
 import maya.cmds as cmds
 
 # ctrl shape info -- for easier editing later
-
 ctrl_info = [
     {"id": "ecl", "side": "l", "x": 4, "color": 17}, # left eye control
     {"id": "ecr", "side": "r", "x": -4, "color": 18}, # right eye control
     {"id": "ecp", "name": "anim_eyes01", "color": 13}, # eye parent control
 ]
 
-blink_info = {"min": -10, "max": 10, "name": "Blink", "shortname": "b"} # blink attribute
-follow_info = {"min": 0, "max": 1, "name": "Follow", "shortname": "f"} # head follow attribute
+# blink and follow attribute info for parent locator
+attr_info = [
+    {"name": "blink_l", "shortname": "b_l", "min": -10, "max": 10, "dv": 0},
+    {"name": "blink_r", "shortname": "b_r", "min": -10, "max": 10, "dv": 0},
+    {"name": "follow", "shortname": "f", "min": 0, "max": 1, "dv": 1}
+]
 
-# validate selection
-def validate():
+# X world position checker
+def check_x_pos(sel) -> list:
+    return [cmds.xform(joint, q=True, t=True, ws=True)[0] for joint in sel]
+
+# validate selection and return names of eye joints
+def validate() -> list:
     sel = cmds.ls(sl=True, type="joint", sn=True)
+
+    # check for 2 selected joints
     if not sel or len(sel) != 2:
         raise RuntimeError("Please select two eye joints.")
-# check for other edge cases resulting in errors and safeguard against them!!
+    
+    # check for mirrored x position
+    x_pos = check_x_pos(sel)
+    mid_x = (x_pos[0] + x_pos[1])/2
+    if abs(mid_x) > 1e-4:
+        raise RuntimeError("Eye joints must me symmetrical around world X.")
 
+    return sel
 
 # create eye control curves: two eye circles + parent locator
-def create_shapes():
-    controls = {}
+def create_shapes() -> list:
+    controls = []
     for entry in ctrl_info:
         if "x" in entry:
-            c = cmds.circle(c=(entry["x"], 0, 0), r=2.5, ch=False, n=f"anim_{entry["side"]}_01")[0]
+            c = cmds.circle(
+                c=(entry['x'], 0, 0), 
+                r=2.5, 
+                ch=False, 
+                n=f"anim_{entry['side']}_01"
+                )[0]
         else:
             c = cmds.spaceLocator(n=entry["name"])[0]
             cmds.setAttr(f"{c}.localScaleY", 2.5)
-            for n in ("l", "r"):
+            for n in ["px", "py", "pz", "sx", "sy", "sz"]:
+                cmds.setAttr(
+                    f"{entry['name']}Shape.l{n}",
+                    keyable=False,channelBox=False,lock=True)
+            
+            for id in attr_info:
+                longname=f"{id['name']}"
                 cmds.addAttr(
-                    ln=f"{blink_info["name"]} {n}", 
-                    sn=f"{blink_info["shortname"]}_{n}", 
-                    at="float", 
-                    dv=0, 
-                    min=blink_info["min"], 
-                    max=blink_info["max"])
-            cmds.addAttr(
-                ln=f"{follow_info["name"]}", 
-                sn=f"{follow_info["shortname"]}", 
-                at="float", 
-                dv=1, 
-                min=follow_info["min"], 
-                max=follow_info["max"])
+                    ln=longname,sn=f"{id['shortname']}",
+                    at="float",dv=id['dv'],
+                    min=id["min"],max=id["max"])
+                cmds.setAttr(f"{c}.{longname}", channelBox=True)
+        
         cmds.xform(c, centerPivots=True)
         cmds.setAttr(f"{c}.overrideEnabled", 1)
         cmds.setAttr(f"{c}.overrideRGBColors", 0)
         cmds.setAttr(f"{c}.overrideColor", entry["color"])
         for value in ("sx", "sy", "sz", "v"):
-            cmds.setAttr(f"{c}.{value}", lock=True, keyable=False, channelBox=False)
-        controls[entry["id"]] = c
+            cmds.setAttr(
+                f"{c}.{value}",
+                lock=True,keyable=False,channelBox=False)
+            
+        controls.append(c) # list: ecl, ecr, ecp
     return controls
 
 # position controls in relation to eyes and connect them
-def position_controls(controls: dict):
-    cmds.parent([controls["ecl"], controls["ecr"]], controls["ecp"])
+def position_controls(ecl, ecr, ecp, ej: list):
 
+    # check joint sides
+    x_pos = check_x_pos(ej)
+    left_joint = ej[0] if x_pos[0] > 0 else ej[1]
+    right_joint = ej[1] if x_pos[1] < 0 else ej[0]
+
+    # snap eye controls to joints
+    for ctrl, joint in zip([ecl, ecr], [left_joint, right_joint]):
+        eye_control_constraint = cmds.parentConstraint(joint, ctrl, mo=False)
+        cmds.delete(eye_control_constraint)
+        cmds.setAttr(f"{ctrl}.rotate", 0, 0, 0)
+        cmds.makeIdentity(ctrl, a=True, t=True)
+    
+    # move locator, parent eye controls to it
+    locator_constraint = cmds.parentConstraint(ecl, ecr, ecp, mo=False)
+    cmds.delete(locator_constraint)
+    cmds.parent([ecl, ecr], ecp)
+    cmds.setAttr(f"{ecp}.translateZ", 40)
+    cmds.makeIdentity(ecp, a=True, t=True)
 
 
 
@@ -93,13 +131,13 @@ def show_ui():
         cmds.setParent("..")
 
     def onCreate(*args):
-        validate()
-        controls = create_shapes()
-        position_controls(controls)
-        eye_rotation()
-        implement_follow()
-        create_blink()
-        fleshy_eyes()
+        eye_joints = validate() # check selection
+        ecl, ecr, ecp = create_shapes() # left, right, and parent controls as strings
+        position_controls(ecl, ecr, ecp, eye_joints) # position and parent controls
+        # eye_rotation()
+        # implement_follow()
+        # create_blink()
+        # fleshy_eyes()
         
 
 
