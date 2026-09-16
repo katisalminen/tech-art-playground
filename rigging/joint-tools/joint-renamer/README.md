@@ -9,6 +9,8 @@ The tool provides options for joint type, side of the body, region, and numeric 
 
 This tool does not perform fully automatic or template-based naming. The user is responsible for providing naming input and confirming each step.
 
+NOTE: This was the first tool I developed, and the code quality reflects that. I have left the code unchanged to represent my knowledge at the time.
+
 
 
 ## How to use
